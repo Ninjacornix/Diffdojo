@@ -329,6 +329,56 @@ const commands = {
     console.log(`Deleted ${r.removed}`);
   },
 
+  /**
+   * Machine interface for the in-app UI (hooks/ui.tsx): one JSON object on stdout.
+   *   api status | next | fill | answer <id> <response...> | skip <id> | snooze <id> | bad <id>
+   */
+  async api({ pos }) {
+    const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+    const { root, repoId } = repoContext();
+    const enabled = !!(repoId && util.isEnabled(repoId));
+    const sub = pos[1] || 'status';
+    if (!root) return out({ enabled: false, queued: 0, question: null });
+    const d = db();
+    const queue = require('./queue');
+    const server = require('./server');
+    const stats = require('./stats');
+    const status = () => {
+      const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
+      return { enabled, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, { repoId }) };
+    };
+    if (sub === 'status') return out(status());
+    if (sub === 'next') return out({ ...status(), question: enabled ? server.publicQuestion(queue.next(d, { repoId })) : null });
+    if (sub === 'fill') {
+      // Keep something to answer while Claude works: concept questions on the detected/pinned topics.
+      let added = 0;
+      if (enabled && queue.queuedCount(d, repoId) === 0) {
+        const cfg = config.load(repoId);
+        const prof = require('./topics').profile(d, repoId, cfg.pinnedTopics);
+        const qs = require('./generators/questionnaire').pickPack(d, { topics: prof, count: 3 });
+        const batch = `${util.nowIso()}#fill`;
+        for (const q of qs) require('./store').insertQuestion(d, { ...q, repo_id: repoId, batch });
+        added = qs.length;
+      }
+      return out({ ...status(), added });
+    }
+    const q = pos[2] ? queue.get(d, Number(pos[2])) : null;
+    if (!q) return out({ error: 'no such question' });
+    const cfg = config.load(q.repo_id || repoId);
+    if (sub === 'answer') {
+      if (q.status === 'answered') return out({ error: 'already answered' });
+      const grader = require('./grader');
+      const r = await grader.answer(d, q, pos.slice(3).join(' '), { mode: q.exam_id ? 'exam' : 'normal', root: queue.repoPath(d, q.repo_id) || root, cfg });
+      return out({ correct: r.correct, xp: r.xp, answerText: server.answerText(q, r), explanation: r.explanation, evidence: r.evidence, detail: r.detail, feedback: r.feedback, trophies: r.trophies, ...status() });
+    }
+    const grader = require('./grader');
+    if (sub === 'skip') grader.skip(d, q);
+    else if (sub === 'snooze') grader.snooze(d, q, cfg.snoozeMinutes);
+    else if (sub === 'bad') grader.bad(d, q);
+    else return out({ error: `unknown api command ${sub}` });
+    return out({ ok: true, ...status() });
+  },
+
   doctor() {
     const lines = [];
     const ok = (b, msg) => lines.push(`${b ? '✓' : '✗'} ${msg}`);

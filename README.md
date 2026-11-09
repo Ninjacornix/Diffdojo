@@ -70,21 +70,31 @@ You can also tell it how to run your tests, which unlocks more question types:
 /diffdojo:start npm test
 ```
 
-**4. Answer questions in a second terminal**
+**4. Keep working — questions pop up right inside Claude Code**
 
-```bash
-diffdojo quiz
+While Claude is working, the current question appears in a box just above your prompt:
+
+```
+╭──────────────────────────────────────────────────────────────╮
+│ 🥋 DiffDojo · Design · Data structure · verified · 10 XP     │
+│ `jobs` is declared in sched.py:8 in Claude's change. What is it? │
+│ 1 a) dict                                                    │
+│ 2 b) list used as a binary heap (heapq)                      │
+│ 3 c) set                                                     │
+│ 4 d) tuple                                                   │
+│ Press 1-4 in the empty prompt · Skip  Snooze  Bad question  Hide │
+╰──────────────────────────────────────────────────────────────╯
 ```
 
-Or, if you prefer a browser:
+- **Multiple choice:** just press **1–4** while your prompt is empty.
+- **Typed answers** (line numbers, outputs): press **ctrl+x tab** to jump into the answer box, type, and hit Enter.
+- **`/dojo`** opens a side pane with the full question and its code.
+- The status line shows how many questions are waiting, and a small pop-up tells you when new ones arrive.
 
-```bash
-diffdojo serve
-```
+Questions about a change appear shortly after Claude finishes it; in between, you get concept quizzes on the topics you're working in. Answer whenever you like, or not at all — none of this is ever shown to Claude.
 
-That's it. Keep working with Claude as usual — new questions show up after each of Claude's turns. Answer them whenever you like, or not at all.
-
-> No `npm link`? Use `node /path/to/Diffdojo/bin/diffdojo quiz` instead.
+**Prefer a separate window?** Use `diffdojo quiz` in a second terminal, or `diffdojo serve` for a browser page.
+*(No `npm link`? Use `node /path/to/Diffdojo/bin/diffdojo quiz`.)*
 
 ---
 
@@ -92,7 +102,8 @@ That's it. Keep working with Claude as usual — new questions show up after eac
 
 | Command | What it does |
 |---|---|
-| `diffdojo quiz` | Answer your queued questions |
+| `/dojo` (in Claude Code) | Open the quiz pane beside the chat |
+| `diffdojo quiz` | Answer your queued questions in a terminal |
 | `diffdojo quiz --topic networking` | Practice a topic — no Claude session needed |
 | `diffdojo stats` | Your belts, XP, accuracy, streak and trophies |
 | `diffdojo review` | Retry questions you got wrong |

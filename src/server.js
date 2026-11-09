@@ -160,4 +160,4 @@ function start({ db, repoId, root, port = 0 }) {
   });
 }
 
-module.exports = { start, publicQuestion };
+module.exports = { start, publicQuestion, answerText };

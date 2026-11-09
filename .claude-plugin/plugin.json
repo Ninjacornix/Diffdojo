@@ -3,7 +3,15 @@
   "displayName": "DiffDojo",
   "version": "0.1.0",
   "description": "Code challenges, concept quizzes and design questions about what Claude just wrote. Local only. Independent project, not affiliated with Anthropic.",
-  "author": { "name": "DiffDojo contributors" },
+  "author": {
+    "name": "DiffDojo contributors"
+  },
   "license": "MIT",
-  "keywords": ["learning", "code-review", "quiz", "mutation-testing"]
+  "keywords": [
+    "learning",
+    "code-review",
+    "quiz",
+    "mutation-testing"
+  ],
+  "types": "./types/index.d.ts"
 }
