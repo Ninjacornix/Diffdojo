@@ -41,6 +41,7 @@ function fakeCli(on: any, question: any, answer: Record<string, unknown> = {}) {
     calls.push(args)
     let body: Record<string, unknown> = { enabled: true, queued: current ? 1 : 0, header: 'White belt Python (20 / 150)' }
     if (args[0] === 'next' || args[0] === 'fill') body = { ...body, question: current }
+    if (args[0] === 'battle-state') body = { ...body, battle: false, state: { phase: 'menu', mode: null } }
     if (args[0] === 'answer') {
       body = { ...body, queued: 0, correct: true, xp: 20, answerText: null, explanation: 'The boundary moved by one.', evidence: 'line 3', detail: null, feedback: null, trophies: [], ...answer }
       current = null
@@ -119,4 +120,74 @@ test('skip moves on, and the pane shows the full question', async ($, on) => {
   expect(calls.some(c => c[0] === 'skip' && c[1] === '7')).toBe(true)
   expect(await pane.find({ type: 'Text', text: /No questions queued/ })).toBeTruthy()
   await pane.unmount()
+})
+
+// ---------------- battle mode ----------------
+
+const FRAMES = [['  (o_o)  ', '  /| |\  '], ['  (-_-)  ', '  \| |/  ']]
+const FIGHT = {
+  mode: 'easy', modeLabel: 'Easy', phase: 'fight', stage: 0, stages: 3, wave: 1, lives: 3, maxLives: 3,
+  player: { name: 'YOU', hp: 100, maxHp: 100, frames: FRAMES },
+  enemy: { name: 'TYPO SPRITE', level: 3, hp: 60, maxHp: 60, frames: FRAMES, boss: false, color: null },
+  best: {}, wins: {}, hasQuestion: true,
+}
+const BQ = { id: 11, prompt: 'Which search finds shortest paths in an unweighted graph?', code: null, choices: { a: 'DFS', b: 'BFS', c: 'Topological sort', d: 'Dijkstra with negative weights' }, type: 'pack', family: 'questionnaire', difficulty: 'easy', location: null }
+
+function fakeBattle(on: any) {
+  const calls: string[][] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, queued: 0, header: '' }
+    if (args[0] === 'battle-state') body = { ...body, battle: true, state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
+    if (args[0] === 'battle-start') body = { state: FIGHT }
+    if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
+    if (args[0] === 'battle-answer')
+      body = {
+        correct: args[1] === 'b', correctKey: 'b', xp: 5, explanation: 'BFS explores by distance.', enemyName: 'TYPO SPRITE',
+        damage: 35, enemyDamage: 15, enemyHpBefore: 60, enemyHpAfter: 25, playerHpBefore: 100, playerHpAfter: args[1] === 'b' ? 100 : 85,
+        trophies: [], state: { ...FIGHT, enemy: { ...FIGHT.enemy, hp: 25 } },
+      }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  return calls
+}
+
+const BATTLE_PANE = {
+  plugin: 'diffdojo',
+  component: 'Pane',
+  requestId: 'dojo-battle',
+  props: { title: 'DiffDojo Battle', isFocused: true, bodyColumns: 90, placement: 'inline', scroll: { offset: 0, bodyRows: 30 }, view: {} },
+} as const
+
+test('battle: pick a mode, fight with arrows + Enter, see the hit, continue', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BATTLE_PANE, surface } as any)
+    expect(await ui.find({ key: 'mode' })).toBeTruthy()
+    await ui.unmount()
+  }
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'easy' })
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'easy')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE asks/ })).toBeTruthy()
+  expect(await ui.find({ key: 'q-11' })).toBeTruthy()
+  await ui.select({ key: 'q-11', value: 'b' })
+  expect(calls.some(c => c[0] === 'battle-answer' && c[1] === 'b')).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /You hit TYPO SPRITE for 35/ }))?.text).toContain('+5 XP')
+  await ui.select({ key: 'continue', value: 'go' })
+  expect(await ui.find({ key: 'q-11' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
+  fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'easy' })
+  await ui.select({ key: 'q-11', value: 'a' })
+  expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits you for 15/ })).toBeTruthy()
+  await ui.unmount()
 })

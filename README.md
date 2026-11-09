@@ -26,6 +26,41 @@ Everything runs on your machine. No accounts, no servers, nothing uploaded.
 
 Every answer is checked against real evidence — running the code, reading it, or reviewed answer keys — not guesswork.
 
+## ⚔️ Battle mode
+
+While Claude works, the questions turn into a retro turn-based fight drawn in ASCII art above your prompt — only the tail of Claude's latest output stays in view:
+
+```
+╭────────────────────────────────╮
+│ EVIL CLAUDE ☠                  │               \  |  /
+│ Lv99 · Professional 3/3        │           '.   \ | /   .'
+│ HP ████████████░░░░░░░░        │             '. \|/ .'
+│    108/180                     │         ---- ( >_< ) ----
+╰────────────────────────────────╯             .' /|\ '.
+                                           .'   / | \   '.
+      ___                                      /  |  \
+     [___]                         ╭────────────────────────────────╮
+     (o_o)                         │ YOU  ♥♥♡                       │
+    /|[_]|\                        │ HP ██████████████░░░░░░        │
+     _| |_                         │    70/100                      │
+                                   ╰────────────────────────────────╯
+╔══════════════════════════════════════════════════════════════════╗
+║ EVIL CLAUDE asks:  Code challenge · hard · src/net/retry.cpp     ║
+║ One line was changed in this copy of `drain()`. Pick the line.   ║
+║ ❯ a) line 4: while (!pending_.empty() || pending_.top()...       ║
+║   b) line 6: pending_.pop();                                     ║
+║   c) line 2: std::lock_guard<std::mutex> guard(mu_);             ║
+║   d) line 7: n++;                                                ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+- **↑/↓ to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (sometimes it misses!).
+- Beat an enemy and your HP is fully restored for the next one. You have **3 lives** — lose them all and you start the ladder over.
+- **Modes:** Easy · Medium · Hard · **Professional**, whose final boss is **Evil Claude** · **Endless** (waves get stronger; your best wave is recorded).
+- Everything idles and animates: sprites bob and blink, hits shake and flash, HP bars drain.
+- Battle answers count like any other: XP, belts, stats — plus trophies for clearing each ladder.
+- `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` goes back to the plain question box. Esc returns to your prompt.
+
 ## Earn your belts
 
 Correct answers earn XP. XP unlocks **belt exams** — White → Yellow → Orange → Green → Blue → Brown → Black — separately for each topic (C++, Python, Networking…). Higher belts unlock harder challenges like **boss fights** (find 3 hidden bugs in one file) and **audit mode** (is there a bug at all?).

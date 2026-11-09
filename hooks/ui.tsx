@@ -8,6 +8,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { DojoQuestion, DojoResult } from '../types'
+import { battleSessionStart, openBattle, registerBattle } from './battle'
 
 const PANE = 'diffdojo'
 const KEYS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -19,6 +20,8 @@ const header = atom({ plugin: 'diffdojo', key: 'header' } as const, '')
 const enabled = atom({ plugin: 'diffdojo', key: 'enabled' } as const, false)
 const working = atom({ plugin: 'diffdojo', key: 'working' } as const, false)
 const isHidden = atom({ plugin: 'diffdojo', key: 'isHidden' } as const, false)
+// The same value hooks/battle.tsx owns: whether fights replace the plain question box.
+const battleOn = atom({ plugin: 'diffdojo', key: 'battleOn' } as const, true)
 const isBusy = atom({ plugin: 'diffdojo', key: 'isBusy' } as const, false)
 
 type Api = {
@@ -108,9 +111,12 @@ async function act($: Engine, q: DojoQuestion, what: 'skip' | 'snooze' | 'bad') 
 }
 
 export const register: Register = on => {
+  registerBattle(on)
+
   on('session.start', async ($, e, nextHook) => {
     const started = await nextHook(e)
     await $.command.register({ name: 'dojo', description: 'Open the DiffDojo quiz pane (questions about what Claude just wrote)' })
+    await battleSessionStart($)
     void refresh($)
     return started
   })
@@ -127,6 +133,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, nextHook) => {
     const r = await nextHook(e)
     await update($, working, () => true)
+    if ((await read($, battleOn)) && (await read($, enabled))) void openBattle($, true)
     void (async () => {
       const s = await api($, ['fill'])
       if (!s.error) await apply($, s)
@@ -156,7 +163,7 @@ export const register: Register = on => {
     const res = await read($, result)
     const busy = e.props.isWorking || (await read($, working))
     const on_ = await read($, enabled)
-    if (e.props.hasSurvey || !on_ || (await read($, isHidden)) || !q || (!busy && !res)) return nextHook(e)
+    if ((await read($, battleOn)) || e.props.hasSurvey || !on_ || (await read($, isHidden)) || !q || (!busy && !res)) return nextHook(e)
     const { Box, Text, Button, Input } = $.ui.resolve(e)
 
     if (res && res.questionId === q.id) {

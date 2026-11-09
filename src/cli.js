@@ -348,7 +348,21 @@ const commands = {
       const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
       return { enabled, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
     };
-    if (sub === 'status') return out(status());
+    if (sub === 'status') return out({ ...status(), battle: config.load(repoId).battle });
+    if (sub.startsWith('battle')) {
+      const battle = require('./battle');
+      try {
+        if (sub === 'battle-state') return out({ ...status(), state: battle.view() });
+        if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2])) });
+        if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
+        if (sub === 'battle-resume') return out({ state: battle.view(battle.resume()) });
+        if (sub === 'battle-question') return out(battle.nextQuestion(d, { repoId: enabled ? repoId : null }));
+        if (sub === 'battle-answer') return out({ ...(await battle.answer(d, pos[2], { cfg: config.load(repoId), root })), ...status() });
+      } catch (e) {
+        return out({ error: e.message });
+      }
+      return out({ error: `unknown api command ${sub}` });
+    }
     if (sub === 'next') return out({ ...status(), question: enabled ? server.publicQuestion(queue.next(d, { repoId })) : null });
     if (sub === 'fill') {
       // Keep something to answer while Claude works: concept questions on the detected/pinned topics.

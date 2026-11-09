@@ -33,9 +33,75 @@ export type DojoResult = {
   trophies: { id: string; name: string }[]
 }
 
+/** One fighter's sprite: two idle frames, each a list of lines. */
+export type Frames = string[][]
+
+/** `diffdojo api battle-state` (src/battle.js view()). */
+export type BattleView = {
+  mode: string | null
+  modeLabel: string | null
+  phase: 'menu' | 'fight' | 'gameover' | 'victory'
+  stage: number
+  stages: number | null
+  wave: number
+  lives: number
+  maxLives: number
+  player: { name: string; hp: number; maxHp: number; frames: Frames }
+  enemy: { name: string; level: number; hp: number; maxHp: number; frames: Frames; boss: boolean; color: string | null } | null
+  best: Record<string, number>
+  wins: Record<string, number>
+  hasQuestion: boolean
+}
+
+/** A battle question: always four answers, a-d. */
+export type BattleQuestion = {
+  id: number
+  prompt: string
+  code: string | null
+  choices: Record<string, string>
+  type: string
+  family: string
+  difficulty: string
+  location: string | null
+}
+
+/** What one exchange of blows came to. */
+export type BattleResult = {
+  correct: boolean
+  correctKey: string
+  picked: string
+  prompt: string
+  xp: number
+  explanation: string | null
+  enemyName: string
+  damage?: number
+  enemyDamage?: number
+  enemyMissed?: boolean
+  enemyDefeated?: boolean
+  nextEnemy?: string
+  victory?: boolean
+  lifeLost?: boolean
+  gameOver?: boolean
+  enemyHpBefore: number
+  enemyHpAfter: number
+  playerHpBefore: number
+  playerHpAfter: number
+  trophies: { id: string; name: string }[]
+}
+
+export type BattleAnim = { kind: 'enemyHit' | 'playerHit' | 'dodge'; frame: number }
+
 declare module 'claude-code' {
   interface PluginState {
     diffdojo: {
+      battleOn: boolean
+      battleScene: Shaped<BattleView | null>
+      battleAfter: Shaped<BattleView | null>
+      battleQuestion: Shaped<BattleQuestion | null>
+      battleResult: Shaped<BattleResult | null>
+      battleAnim: Shaped<BattleAnim | null>
+      battleTick: number
+      battleBusy: boolean
       current: Shaped<DojoQuestion | null>
       result: Shaped<DojoResult | null>
       queued: number

@@ -40,6 +40,10 @@ const TROPHIES = {
   scholar: 'Scholar — answered every question in a curated pack correctly',
   'pack-author': 'Pack Author — got a question merged into a public pack (self-reported)',
   skeptic: 'Skeptic — correctly answered "no bug here" five times in audit mode',
+  'battle-easy': 'Rookie — cleared the Easy battle ladder',
+  'battle-medium': 'Bug Squasher — cleared the Medium battle ladder',
+  'battle-hard': 'Concurrency Tamer — cleared the Hard battle ladder',
+  'evil-claude': 'Evil Claude Defeated — cleared the Professional battle ladder',
 };
 
 function beltIndex(b) {
