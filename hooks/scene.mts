@@ -7,15 +7,18 @@
 // bracket, you from behind bottom left, and a text box along the bottom.
 // All characters are original.
 
-export type Seg = { t: string; c: string; bg: string; b?: boolean }
+// `c` null = the terminal's own text color; nothing paints a background.
+export type Seg = { t: string; c: string | null; b?: boolean }
 export type Line = Seg[]
 
+// Drawn on the terminal's own background: the main ink is the terminal's text
+// color, so it reads on dark and light themes alike.
 export const PALETTE = {
-  bg: '#e3e6c8', // pale screen
-  ink: '#1f2414', // darkest
-  mid: '#6b7155', // secondary text
-  light: '#a7ad8a',
-  hurt: '#b8452f',
+  ink: null as string | null, // the terminal's text color
+  mid: 'gray', // secondary text, empty HP
+  light: 'gray',
+  hurt: '#e0533d', // a hit flashes red
+  low: '#d9a13b', // HP getting low
   boss: '#d97757', // Evil Claude's orange
 }
 
@@ -195,13 +198,13 @@ export function art(id: string, frame: number): string[] {
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
   const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : PALETTE.ink
-  return art(id, frame).map(t => [{ t, c, bg: PALETTE.bg, b: true }])
+  return art(id, frame).map(t => [{ t, c, b: !!c }])
 }
 
 // ---------------------------------------------------------------- layout helpers
 
-function seg(t: string, c = PALETTE.ink, b = false): Seg {
-  return { t, c, bg: PALETTE.bg, b }
+function seg(t: string, c: string | null = PALETTE.ink, b = false): Seg {
+  return { t, c, b }
 }
 
 function width(line: Line): number {
@@ -236,7 +239,7 @@ export function join(left: Line, right: Line, at: number): Line {
 
 export function hpBar(hp: number, max: number, cells = 16): Line {
   const n = Math.max(0, Math.min(cells, Math.round((hp / Math.max(1, max)) * cells)))
-  const c = hp / max > 0.5 ? PALETTE.ink : hp / max > 0.2 ? PALETTE.mid : PALETTE.hurt
+  const c = hp / max > 0.5 ? PALETTE.ink : hp / max > 0.2 ? PALETTE.low : PALETTE.hurt
   return [seg('HP:', PALETTE.ink, true), seg('▐'), seg('█'.repeat(n), c), seg('░'.repeat(cells - n), PALETTE.light), seg('▌')]
 }
 
@@ -384,7 +387,7 @@ export function textBox(text: string[], w: number, tick: number, arrow: boolean,
 }
 
 /** A full-width row of plain text on the screen's background. */
-export function plain(text: string, w: number, c = PALETTE.ink, b = false): Line {
+export function plain(text: string, w: number, c: string | null = PALETTE.ink, b = false): Line {
   return pad([seg(text, c, b)], Math.max(56, w))
 }
 

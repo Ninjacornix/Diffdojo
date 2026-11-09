@@ -28,7 +28,7 @@ Every answer is checked against real evidence — running the code, reading it, 
 
 ## Battle mode
 
-While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters. In color, the screen is pale green-gray with dark ink:
+While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors:
 
 ```
  TYPO SPRITE                                    \   ~   /

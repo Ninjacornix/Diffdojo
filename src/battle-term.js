@@ -25,13 +25,20 @@ function rgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/** Foreground only: the terminal's own background shows through everywhere. */
+function fg(c) {
+  if (!c) return ''; // the terminal's text color
+  if (c === 'gray' || c === 'grey') return '\x1b[90m';
+  const [r, g, b] = rgb(c);
+  return `\x1b[38;2;${r};${g};${b}m`;
+}
+
 function ansi(lines, color = true) {
   if (!color) return lines.map((l) => l.map((s) => s.t).join('')).join('\n');
   return lines
     .map((l) => l.map((s) => {
-      const [r, g, b] = rgb(s.c);
-      const [R, G, B] = rgb(s.bg);
-      return `\x1b[38;2;${r};${g};${b}m\x1b[48;2;${R};${G};${B}m${s.b ? '\x1b[1m' : ''}${s.t}\x1b[0m`;
+      const style = fg(s.c) + (s.b ? '\x1b[1m' : '');
+      return style ? `${style}${s.t}\x1b[0m` : s.t;
     }).join(''))
     .join('\n');
 }

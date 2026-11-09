@@ -90,7 +90,6 @@ export async function openBattle($: Engine, focus: boolean) {
     title: 'DiffDojo Battle',
     rows: 32,
     closeOnEscape: true,
-    backgroundColor: PALETTE.bg,
     ...(focus ? { focus: true as const } : {}),
   })
   if (opened.isPlaced) {
@@ -213,16 +212,16 @@ export function registerBattle(on: On) {
     const draw = (lines: Line[]) =>
       lines.map(l =>
         l.length === 1 ? (
-          <Text color={l[0].c} backgroundColor={l[0].bg} bold={!!l[0].b}>{l[0].t}</Text>
+          <Text color={l[0].c ?? undefined} bold={!!l[0].b}>{l[0].t}</Text>
         ) : (
           <Text>
             {l.map(sg => (
-              <Text color={sg.c} backgroundColor={sg.bg} bold={!!sg.b}>{sg.t}</Text>
+              <Text color={sg.c ?? undefined} bold={!!sg.b}>{sg.t}</Text>
             ))}
           </Text>
         ),
       )
-    const rule = <Text color={PALETTE.ink} backgroundColor={PALETTE.bg}>{'═'.repeat(W)}</Text>
+    const rule = <Text>{'═'.repeat(W)}</Text>
     const rowsOf = (rows: BoxRow[]) => draw(box(rows, W, t, false, 0).slice(1, -1))
 
     // ---- menu
@@ -230,7 +229,7 @@ export function registerBattle(on: On) {
       const best = (s && s.best) || {}
       const wins = (s && s.wins) || {}
       return (
-        <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+        <Box flexDirection="column">
           {draw([plain('', W), ...TITLE.map((l, n) => plain('   ' + l, W, n % 2 === t % 2 ? PALETTE.ink : PALETTE.mid, true)), plain('', W)])}
           {draw([plain('   Answer right to strike. Answer wrong and they strike back. 3 lives.', W), plain('', W)])}
           {rule}
@@ -255,7 +254,7 @@ export function registerBattle(on: On) {
       const won = s.phase === 'victory'
       const id = won && s.mode === 'professional' ? 'evil' : 'player'
       return (
-        <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+        <Box flexDirection="column">
           {draw([plain('', W), plain(won ? '        V I C T O R Y' : '        G A M E   O V E R', W, won ? PALETTE.ink : PALETTE.hurt, true), plain('', W)])}
           {draw(spriteLines(id, t).map(l => pad(join([], l, 8), W)))}
           {rule}
@@ -318,7 +317,7 @@ export function registerBattle(on: On) {
     }
 
     return (
-      <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+      <Box flexDirection="column">
         {draw(field)}
         {rule}
         {rowsOf(rows)}
