@@ -1,0 +1,16 @@
+{
+  "name": "diffdojo",
+  "version": "0.1.0",
+  "description": "A Claude Code plugin that turns waiting time into practice on your own code: seeded-bug hunts, predict-the-output, killing tests, design questions and concept quizzes about what Claude just wrote. Local only.",
+  "license": "MIT",
+  "bin": { "diffdojo": "bin/diffdojo" },
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "pack-ci": "node scripts/pack-ci.js",
+    "lint": "node scripts/check-syntax.js"
+  },
+  "optionalDependencies": {},
+  "keywords": ["claude-code", "plugin", "learning", "code-review", "mutation-testing", "quiz"],
+  "files": [".claude-plugin", "hooks", "skills", "scripts", "src", "bin", "packs", "docs", "README.md", "LICENSE"]
+}

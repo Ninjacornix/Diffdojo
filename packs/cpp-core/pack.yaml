@@ -1,0 +1,4 @@
+name: cpp-core
+topic: cpp/core
+track: cpp
+description: Core C++ — value categories, move semantics, RAII, containers, templates, undefined behaviour.

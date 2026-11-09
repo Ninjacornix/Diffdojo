@@ -1,0 +1,425 @@
+questions:
+  - id: cc-race-001
+    topic: cpp/concurrency
+    difficulty: easy
+    format: multiple_choice
+    question: What is a data race in C++?
+    choices:
+      a: Two threads reading the same variable at the same time
+      b: Two threads accessing the same memory location concurrently, at least one writing, without synchronisation (not both atomic)
+      c: Two threads waiting on the same mutex
+      d: A thread finishing before another
+    answer: b
+    explanation: A data race is undefined behaviour, not just a wrong result. Concurrent reads alone are fine.
+
+  - id: cc-race-002
+    topic: cpp/concurrency
+    difficulty: medium
+    format: true_false
+    question: "`counter++` on a plain `int` shared between threads is safe on x86 because the increment is a single instruction."
+    answer: false
+    explanation: >
+      It is a data race and therefore undefined behaviour regardless of the CPU. Even at machine level
+      the increment is a read-modify-write that can lose updates. Use std::atomic<int> or a mutex.
+
+  - id: cc-volatile-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: Is `volatile bool stop;` a correct way to signal a worker thread to stop?
+    choices:
+      a: Yes, volatile makes accesses atomic and ordered
+      b: No, volatile gives neither atomicity nor inter-thread ordering; use std::atomic<bool>
+      c: Yes, but only on x86
+      d: Only if the flag is also static
+    answer: b
+    explanation: volatile is for memory-mapped I/O and signal handlers, not thread synchronisation.
+
+  - id: cc-mutex-001
+    topic: cpp/concurrency
+    difficulty: easy
+    format: multiple_choice
+    question: Why prefer std::lock_guard / std::scoped_lock over calling mutex.lock() and unlock() manually?
+    choices:
+      a: They are faster
+      b: They release the mutex automatically when the scope exits, including on exceptions and early returns
+      c: They prevent deadlocks in all cases
+      d: They make the mutex recursive
+    answer: b
+    explanation: RAII guards make it impossible to forget the unlock on some exit path.
+
+  - id: cc-mutex-002
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: What is wrong with `std::lock_guard<std::mutex>(mu_);` written as a statement?
+    choices:
+      a: Nothing
+      b: It declares a new lock_guard named mu_ (or creates an unnamed temporary), so the real mutex is not held for the scope
+      c: It deadlocks immediately
+      d: It locks the mutex twice
+    answer: b
+    explanation: >
+      The parentheses form parses as a declaration of a variable mu_ (a compile error or shadowing),
+      and an unnamed `std::lock_guard<std::mutex>{mu_};` unlocks at the end of the statement. Always name the guard.
+
+  - id: cc-deadlock-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: Thread 1 locks A then B; thread 2 locks B then A. How do you prevent the resulting deadlock?
+    choices:
+      a: Use recursive mutexes
+      b: Lock both with std::scoped_lock(a, b) (or always in one global order)
+      c: Add sleep() between the locks
+      d: Use volatile
+    answer: b
+    explanation: scoped_lock uses a deadlock-avoidance algorithm; a consistent lock order is the general fix.
+
+  - id: cc-deadlock-002
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_select
+    question: Which are the four Coffman conditions that must all hold for a deadlock? Select all that apply.
+    choices:
+      a: Mutual exclusion
+      b: Hold and wait
+      c: No preemption
+      d: Circular wait
+      e: Priority inversion
+    answer: [a, b, c, d]
+    explanation: Break any one (most practically, circular wait via lock ordering) and deadlock is impossible.
+
+  - id: cc-cv-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: Why must std::condition_variable::wait be called with a predicate or inside a loop?
+    choices:
+      a: Because of spurious wakeups and because the condition may have changed before the waiter reacquired the lock
+      b: Because wait() never blocks
+      c: Because notify_one wakes every thread
+      d: It's only a style rule
+    answer: a
+    explanation: "Use cv.wait(lock, [&]{ return ready; }); which re-checks the condition after every wakeup."
+
+  - id: cc-cv-002
+    topic: cpp/concurrency
+    difficulty: hard
+    format: multiple_choice
+    question: A producer sets `ready = true` without holding the mutex, then calls cv.notify_one(). What can go wrong?
+    choices:
+      a: Nothing; notify is enough
+      b: A lost wakeup — the consumer may check ready, see false, and then block after the notify already happened
+      c: The program deadlocks immediately
+      d: notify_one throws
+    answer: b
+    explanation: The state change must happen under the same mutex the waiter uses to check it (notify may happen after unlocking).
+
+  - id: cc-atomic-001
+    topic: cpp/concurrency/atomics
+    difficulty: easy
+    format: multiple_choice
+    question: What is the default memory order for std::atomic operations?
+    choices:
+      a: memory_order_relaxed
+      b: memory_order_acquire
+      c: memory_order_seq_cst
+      d: memory_order_consume
+    answer: c
+    explanation: Sequential consistency is the default; it is the strongest and easiest to reason about.
+
+  - id: cc-atomic-002
+    topic: cpp/concurrency/atomics
+    difficulty: medium
+    format: multiple_choice
+    question: What does memory_order_relaxed guarantee for an atomic counter?
+    choices:
+      a: Atomicity of each operation and a single modification order for that variable, but no ordering of other memory accesses
+      b: Nothing at all
+      c: Full sequential consistency
+      d: That other threads see the update immediately
+    answer: a
+    explanation: Relaxed is fine for statistics counters; it does not publish other data to other threads.
+
+  - id: cc-atomic-003
+    topic: cpp/concurrency/atomics
+    difficulty: hard
+    format: multiple_choice
+    question: >
+      Thread A writes `data = 42;` then `flag.store(true, memory_order_release);`.
+      Thread B does `while (!flag.load(memory_order_acquire)) {}` then reads data. What does B see?
+    choices:
+      a: Possibly 0, because data is not atomic
+      b: 42, because the release store synchronises-with the acquire load that reads it
+      c: Undefined behaviour in all cases
+      d: 42 only on x86
+    answer: b
+    explanation: Release/acquire creates a happens-before edge, so writes before the release are visible after the acquire.
+
+  - id: cc-atomic-004
+    topic: cpp/concurrency/atomics
+    difficulty: hard
+    format: true_false
+    question: Replacing the release/acquire pair in a message-passing flag with memory_order_relaxed keeps the program correct as long as the flag itself is atomic.
+    answer: false
+    explanation: Without acquire/release there is no happens-before, so the reader may see the flag but stale data (a data race on the payload).
+
+  - id: cc-atomic-005
+    topic: cpp/concurrency/atomics
+    difficulty: hard
+    format: multiple_choice
+    question: Why do compare_exchange_weak loops exist, and when is weak acceptable?
+    choices:
+      a: weak may fail spuriously, which is fine inside a retry loop and can be faster on LL/SC architectures
+      b: weak never fails
+      c: weak is only for floating point
+      d: weak ignores the memory order
+    answer: a
+    explanation: In a loop the spurious failure just retries; use strong when a single attempt's result matters.
+
+  - id: cc-atomic-006
+    topic: cpp/concurrency/atomics
+    difficulty: medium
+    format: multiple_choice
+    question: What does `std::atomic<T>::is_lock_free()` tell you?
+    choices:
+      a: Whether operations on this atomic are implemented without an internal lock
+      b: Whether the variable can be read without synchronisation
+      c: Whether the program is deadlock-free
+      d: Whether T is trivially copyable
+    answer: a
+    explanation: Large T may be implemented with a hidden mutex; is_always_lock_free is the compile-time version.
+
+  - id: cc-aba-001
+    topic: cpp/concurrency/atomics
+    difficulty: hard
+    format: multiple_choice
+    question: In a lock-free stack using CAS on the head pointer, what is the ABA problem?
+    choices:
+      a: Two threads push the same value
+      b: The head changes from A to B and back to A, so a CAS succeeds even though the structure changed (e.g. a node was freed and reused)
+      c: The stack overflows
+      d: Memory ordering is too strong
+    answer: b
+    explanation: Mitigations include tagged pointers/version counters, hazard pointers and epoch-based reclamation.
+
+  - id: cc-thread-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: What happens if a joinable std::thread object is destroyed?
+    choices:
+      a: The thread is detached automatically
+      b: std::terminate is called
+      c: The destructor joins it
+      d: The thread is killed
+    answer: b
+    explanation: You must join() or detach() first. std::jthread (C++20) joins in its destructor.
+
+  - id: cc-thread-002
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: "`std::thread t(f, std::ref(x));` — why std::ref?"
+    choices:
+      a: Arguments are copied into the thread by default, so std::ref is needed to pass a reference
+      b: It makes x atomic
+      c: It extends x's lifetime
+      d: It is required for every argument
+    answer: a
+    explanation: std::thread decays and copies its arguments. With std::ref you must make sure x outlives the thread.
+
+  - id: cc-async-001
+    topic: cpp/concurrency
+    difficulty: hard
+    format: multiple_choice
+    question: "`std::async(std::launch::async, work);` with the result discarded — what happens?"
+    choices:
+      a: work runs in the background and the statement returns immediately
+      b: The returned future's destructor blocks until work completes, so it runs effectively synchronously
+      c: work never runs
+      d: Undefined behaviour
+    answer: b
+    explanation: Futures from std::async block in their destructor; keep the future if you want overlap.
+
+  - id: cc-falseshare-001
+    topic: cpp/concurrency
+    difficulty: hard
+    format: multiple_choice
+    question: Two threads each increment their own counter, but the counters are adjacent in one struct and the program scales poorly. Why?
+    choices:
+      a: False sharing — both counters live in the same cache line, which bounces between cores
+      b: The counters overflow
+      c: Atomic operations are always slow
+      d: The OS serialises the threads
+    answer: a
+    explanation: Pad or align each hot counter to its own cache line (alignas(std::hardware_destructive_interference_size)).
+
+  - id: cc-shared-mutex-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: When does std::shared_mutex help?
+    choices:
+      a: Read-mostly data, where many readers can hold a shared lock while writers take an exclusive lock
+      b: Write-heavy data with short critical sections
+      c: Recursive locking
+      d: It replaces atomics
+    answer: a
+    explanation: For short or write-heavy critical sections, the extra bookkeeping can make it slower than a plain mutex.
+
+  - id: cc-once-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: true_false
+    question: Initialisation of a function-local static variable is thread-safe in C++11 and later.
+    answer: true
+    explanation: '"Magic statics": concurrent first calls block until one thread finishes initialising.'
+
+  - id: cc-dcl-001
+    topic: cpp/concurrency/atomics
+    difficulty: hard
+    format: multiple_choice
+    question: Why is classic double-checked locking with a plain pointer (`if (!p) { lock; if (!p) p = new T; }`) broken?
+    choices:
+      a: The unlocked first read races with the write, and another thread may see a non-null p before T's construction is visible
+      b: It locks twice
+      c: new is not thread-safe
+      d: It works perfectly
+    answer: a
+    explanation: Make p a std::atomic with acquire/release, or use std::call_once or a function-local static.
+
+  - id: cc-priority-001
+    topic: cpp/concurrency
+    difficulty: hard
+    format: multiple_choice
+    question: What is priority inversion?
+    choices:
+      a: A high-priority thread waits on a lock held by a low-priority thread, which is starved by a medium-priority thread
+      b: Threads run in reverse order of creation
+      c: The scheduler ignores priorities
+      d: A deadlock between two equal-priority threads
+    answer: a
+    explanation: Priority inheritance protocols temporarily raise the lock holder's priority.
+
+  - id: cc-predict-001
+    topic: cpp/concurrency/atomics
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <atomic>
+      #include <iostream>
+      #include <thread>
+      #include <vector>
+      int main() {
+          std::atomic<int> n{0};
+          std::vector<std::thread> ts;
+          for (int t = 0; t < 4; ++t)
+              ts.emplace_back([&] { for (int i = 0; i < 1000; ++i) n.fetch_add(1, std::memory_order_relaxed); });
+          for (auto& t : ts) t.join();
+          std::cout << n.load() << "\n";
+      }
+    answer: "4000"
+    explanation: Relaxed atomic increments never lose updates; join() makes the final value visible.
+
+  - id: cc-predict-002
+    topic: cpp/concurrency
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      #include <mutex>
+      #include <thread>
+      int main() {
+          std::mutex m;
+          int total = 0;
+          auto work = [&] { for (int i = 0; i < 500; ++i) { std::lock_guard<std::mutex> g(m); total += 2; } };
+          std::thread a(work), b(work);
+          a.join(); b.join();
+          std::cout << total << "\n";
+      }
+    answer: "2000"
+    explanation: Each of 2 threads adds 2, 500 times, under the mutex.
+
+  - id: cc-jthread-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: What does std::jthread add over std::thread?
+    choices:
+      a: Automatic join in the destructor and cooperative cancellation via std::stop_token
+      b: Thread pools
+      c: Lock-free queues
+      d: Coroutine support
+    answer: a
+    explanation: jthread requests stop and joins on destruction, avoiding std::terminate.
+
+  - id: cc-semaphore-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: What is std::counting_semaphore useful for?
+    choices:
+      a: Limiting how many threads may use a resource at once
+      b: Protecting a single variable from data races better than a mutex
+      c: Making functions reentrant
+      d: Waiting for a future
+    answer: a
+    explanation: acquire() decrements (blocking at 0) and release() increments; e.g. limit concurrent connections to N.
+
+  - id: cc-latch-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: Difference between std::latch and std::barrier?
+    choices:
+      a: A latch is single-use; a barrier can be reused for repeated phases
+      b: A barrier is single-use; a latch is reusable
+      c: They are identical
+      d: Latch works only with two threads
+    answer: a
+    explanation: latch counts down once; barrier resets after each phase and can run a completion function.
+
+  - id: cc-tsan-001
+    topic: cpp/concurrency
+    difficulty: easy
+    format: multiple_choice
+    question: Which tool detects data races at runtime in C++ programs?
+    choices:
+      a: AddressSanitizer
+      b: ThreadSanitizer (-fsanitize=thread)
+      c: UndefinedBehaviorSanitizer
+      d: gprof
+    answer: b
+    explanation: TSan instruments memory accesses and synchronisation to report races with both stacks.
+
+  - id: cc-order-001
+    topic: cpp/concurrency
+    difficulty: medium
+    format: ordering
+    question: Order the steps a consumer takes when waiting on a condition variable correctly.
+    items:
+      a: Call cv.wait(lock, predicate)
+      b: Lock the mutex with std::unique_lock
+      c: Read the shared state now that the predicate holds
+      d: Release the lock (scope exit)
+    answer: [b, a, c, d]
+    explanation: wait() atomically releases the lock while blocked and reacquires it before returning.
+
+  - id: cc-uaf-001
+    topic: cpp/concurrency
+    difficulty: hard
+    format: multiple_choice
+    question: A worker thread captures `this` in a lambda, and the object can be destroyed while the worker still runs. What is the bug and a common fix?
+    choices:
+      a: Use-after-free; join the worker in the destructor or capture a shared_ptr (shared_from_this) to keep the object alive
+      b: Data race on this; make this atomic
+      c: Deadlock; use a recursive mutex
+      d: No bug; this is always valid
+    answer: a
+    explanation: The object's lifetime must cover every thread that can still touch it.

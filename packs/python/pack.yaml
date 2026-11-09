@@ -1,0 +1,4 @@
+name: python
+topic: python/core
+track: python
+description: Python semantics, data model, performance, asyncio and threading.

@@ -1,0 +1,480 @@
+questions:
+  - id: net-epoll-007
+    topic: networking/epoll
+    difficulty: medium
+    format: multiple_choice
+    question: >
+      With edge-triggered epoll, why can a connection stall if the
+      socket isn't fully drained after a readiness event?
+    choices:
+      a: The kernel closes the TCP connection automatically
+      b: No new readiness event may arrive for data that is already buffered
+      c: The socket switches back to blocking mode
+      d: TCP retransmissions are disabled
+    answer: b
+    explanation: >
+      Edge-triggered mode reports transitions, not state. If unread data
+      remains, no new edge occurs until more data arrives, so the reader
+      can wait forever. Read until EAGAIN.
+    references:
+      - man 7 epoll
+
+  - id: net-epoll-001
+    topic: networking/epoll
+    difficulty: easy
+    format: multiple_choice
+    question: What is the main difference between level-triggered and edge-triggered epoll?
+    choices:
+      a: Level-triggered reports while the condition holds; edge-triggered reports only when it changes
+      b: Edge-triggered works only with UDP
+      c: Level-triggered requires blocking sockets
+      d: There is no difference since Linux 4.0
+    answer: a
+    explanation: LT keeps returning a ready fd until you consume the data; ET notifies once per transition.
+    references:
+      - man 7 epoll
+
+  - id: net-epoll-002
+    topic: networking/epoll
+    difficulty: medium
+    format: true_false
+    question: Edge-triggered epoll should normally be used with non-blocking file descriptors.
+    answer: true
+    explanation: >
+      With ET you must read/write until EAGAIN. On a blocking socket the final read would block
+      the whole event loop.
+    references:
+      - man 7 epoll
+
+  - id: net-epoll-003
+    topic: networking/epoll
+    difficulty: hard
+    format: multiple_choice
+    question: What does EPOLLONESHOT do?
+    choices:
+      a: Removes the fd from the interest list after one event
+      b: Disables the fd after one event until it is re-armed with EPOLL_CTL_MOD, so only one thread handles it at a time
+      c: Makes epoll_wait return at most one event
+      d: Closes the socket after the next read
+    answer: b
+    explanation: >
+      Commonly used with multi-threaded event loops: the fd stays registered but is disarmed until the
+      worker re-enables it, preventing two threads from processing the same socket concurrently.
+    references:
+      - man 2 epoll_ctl
+
+  - id: net-epoll-004
+    topic: networking/epoll
+    difficulty: hard
+    format: multiple_choice
+    question: Which event signals that the peer has shut down its writing side (half-close), without needing a read() returning 0?
+    choices:
+      a: EPOLLHUP
+      b: EPOLLRDHUP
+      c: EPOLLERR
+      d: EPOLLPRI
+    answer: b
+    explanation: EPOLLRDHUP (since Linux 2.6.17) reports a peer shutdown of writing. EPOLLHUP means both directions are hung up.
+    references:
+      - man 2 epoll_ctl
+
+  - id: net-epoll-005
+    topic: networking/epoll
+    difficulty: medium
+    format: multiple_choice
+    question: Why is epoll more scalable than select() for many connections?
+    choices:
+      a: epoll uses UDP internally
+      b: select() copies and scans the whole fd set on every call (O(n)), while epoll keeps the interest list in the kernel and returns only ready fds
+      c: select() only supports IPv4
+      d: epoll disables Nagle's algorithm
+    answer: b
+    explanation: select/poll cost grows with the number of watched fds; epoll_wait's cost grows with the number of ready ones. select also has the FD_SETSIZE limit.
+
+  - id: net-nb-001
+    topic: networking/nonblocking
+    difficulty: easy
+    format: multiple_choice
+    question: What does recv() return (and set) on a non-blocking socket with no data available?
+    choices:
+      a: Returns 0
+      b: Returns -1 with errno EAGAIN or EWOULDBLOCK
+      c: Blocks until data arrives
+      d: Returns -1 with errno ECONNRESET
+    answer: b
+    explanation: 0 means the peer performed an orderly shutdown; -1/EAGAIN means "try again later".
+    references:
+      - man 2 recv
+
+  - id: net-nb-002
+    topic: networking/nonblocking
+    difficulty: medium
+    format: multiple_choice
+    question: What does recv() returning 0 on a TCP socket mean?
+    choices:
+      a: No data is available right now
+      b: The peer closed its side of the connection (EOF)
+      c: The buffer passed was too small
+      d: An error occurred; check errno
+    answer: b
+    explanation: A zero-length read on a stream socket is EOF. The usual reaction is to close the connection (after flushing pending writes).
+
+  - id: net-nb-003
+    topic: networking/nonblocking
+    difficulty: medium
+    format: multiple_choice
+    question: A non-blocking connect() returns -1 with errno EINPROGRESS. How do you find out whether it succeeded?
+    choices:
+      a: Call connect() again in a loop until it returns 0
+      b: Wait for the socket to become writable, then read SO_ERROR with getsockopt
+      c: Call recv() and check for 0
+      d: It always succeeds eventually
+    answer: b
+    explanation: Writability signals completion; SO_ERROR tells you whether it was success (0) or the failure errno.
+    references:
+      - man 2 connect
+
+  - id: net-nb-004
+    topic: networking/nonblocking
+    difficulty: medium
+    format: true_false
+    question: A successful send() on a TCP socket guarantees that the peer has received the data.
+    answer: false
+    explanation: send() only copies data into the kernel's send buffer. Delivery happens later, if at all.
+
+  - id: net-nb-005
+    topic: networking/nonblocking
+    difficulty: hard
+    format: multiple_choice
+    question: send() on a non-blocking socket returns a positive value smaller than the length you passed. What should the code do?
+    choices:
+      a: Treat it as an error and close the connection
+      b: Keep the unsent remainder and send it when the socket is writable again
+      c: Nothing; the kernel will send the rest automatically
+      d: Retry immediately in a tight loop until everything is sent
+    answer: b
+    explanation: Short writes are normal. Buffer the rest and wait for EPOLLOUT (writability) instead of spinning.
+
+  - id: net-sigpipe-001
+    topic: networking/sockets
+    difficulty: hard
+    format: multiple_choice
+    question: Writing to a TCP socket whose peer has closed the connection kills a server process unexpectedly. Why, and how is it usually prevented?
+    choices:
+      a: The kernel sends SIGPIPE; ignore it or use send(..., MSG_NOSIGNAL) and handle EPIPE
+      b: The kernel sends SIGSEGV; there is no fix
+      c: The write blocks forever; use a timeout
+      d: TCP keepalive closes the process
+    answer: a
+    explanation: The default action of SIGPIPE is to terminate. Servers set SIGPIPE to SIG_IGN or pass MSG_NOSIGNAL and check for EPIPE.
+
+  - id: net-tcp-001
+    topic: networking/tcp
+    difficulty: easy
+    format: ordering
+    question: Put the TCP three-way handshake in order.
+    items:
+      a: Server sends SYN-ACK
+      b: Client sends SYN
+      c: Client sends ACK
+    answer: [b, a, c]
+    explanation: SYN, SYN-ACK, ACK. Each side's initial sequence number is acknowledged.
+    references:
+      - RFC 9293
+
+  - id: net-tcp-002
+    topic: networking/tcp
+    difficulty: medium
+    format: multiple_choice
+    question: Which side of a TCP connection enters TIME_WAIT?
+    choices:
+      a: The side that receives the first FIN
+      b: The side that sends the first FIN (the active closer)
+      c: Both sides always
+      d: Only the server
+    answer: b
+    explanation: >
+      The active closer waits about 2*MSL so late segments of the old connection die out and the final
+      ACK can be retransmitted if lost.
+
+  - id: net-tcp-003
+    topic: networking/tcp
+    difficulty: medium
+    format: multiple_choice
+    question: What does SO_REUSEADDR typically let a server do?
+    choices:
+      a: Bind to its port again right after restart even though old connections are in TIME_WAIT
+      b: Share one socket between two processes
+      c: Receive packets for any IP address
+      d: Disable TIME_WAIT entirely
+    answer: a
+    explanation: Without it, bind() can fail with EADDRINUSE after restart. SO_REUSEPORT is the option for load-balancing several listeners on one port.
+
+  - id: net-tcp-004
+    topic: networking/tcp
+    difficulty: medium
+    format: true_false
+    question: TCP preserves message boundaries, so one send() of 100 bytes is always received by exactly one recv() of 100 bytes.
+    answer: false
+    explanation: TCP is a byte stream. Data may be split or coalesced, so applications need framing (length prefix, delimiter).
+
+  - id: net-tcp-005
+    topic: networking/tcp
+    difficulty: medium
+    format: multiple_choice
+    question: What does setting TCP_NODELAY do?
+    choices:
+      a: Disables Nagle's algorithm so small segments are sent immediately
+      b: Disables delayed ACKs on the receiver
+      c: Makes connect() non-blocking
+      d: Skips the three-way handshake
+    answer: a
+    explanation: Nagle buffers small writes while data is unacknowledged. Latency-sensitive request/response protocols often disable it.
+
+  - id: net-tcp-006
+    topic: networking/tcp
+    difficulty: hard
+    format: multiple_choice
+    question: What is the receive window in TCP flow control?
+    choices:
+      a: The number of retransmissions allowed
+      b: How much more data the receiver is willing to accept, advertised in each ACK
+      c: The congestion window of the sender
+      d: The maximum segment size
+    answer: b
+    explanation: Flow control protects the receiver's buffer (rwnd). Congestion control (cwnd) protects the network. The sender uses the minimum of both.
+
+  - id: net-tcp-007
+    topic: networking/tcp
+    difficulty: hard
+    format: multiple_choice
+    question: In classic TCP congestion control, what does the sender do after a timeout-based loss?
+    choices:
+      a: Doubles the congestion window
+      b: Resets cwnd to a small value and re-enters slow start
+      c: Keeps cwnd unchanged
+      d: Closes the connection
+    answer: b
+    explanation: A retransmission timeout is a strong congestion signal. Fast retransmit after triple duplicate ACKs halves cwnd instead.
+
+  - id: net-tcp-008
+    topic: networking/tcp
+    difficulty: medium
+    format: multiple_choice
+    question: What causes a TCP RST (connection reset) to be sent in response to a segment?
+    choices:
+      a: A segment arrives for a port with no listening socket or for a connection that doesn't exist
+      b: The receive buffer is full
+      c: The sender used Nagle's algorithm
+      d: Normal connection shutdown
+    answer: a
+    explanation: RST also happens when an application closes a socket with unread data or uses SO_LINGER with zero timeout.
+
+  - id: net-shutdown-001
+    topic: networking/sockets
+    difficulty: medium
+    format: multiple_choice
+    question: What is the difference between shutdown(fd, SHUT_WR) and close(fd)?
+    choices:
+      a: They are identical
+      b: shutdown(SHUT_WR) sends FIN but keeps the socket open for reading; close releases the descriptor
+      c: close sends RST, shutdown sends FIN
+      d: shutdown frees the descriptor immediately
+    answer: b
+    explanation: Half-close lets you signal end-of-request while still reading the response. close only sends FIN when the last descriptor referring to the socket is closed.
+
+  - id: net-listen-001
+    topic: networking/sockets
+    difficulty: easy
+    format: ordering
+    question: Order the calls a TCP server makes to start accepting connections.
+    items:
+      a: listen()
+      b: socket()
+      c: accept()
+      d: bind()
+    answer: [b, d, a, c]
+    explanation: Create the socket, bind it to an address, mark it listening, then accept connections.
+
+  - id: net-backlog-001
+    topic: networking/sockets
+    difficulty: medium
+    format: multiple_choice
+    question: On Linux, what does the backlog argument of listen() limit?
+    choices:
+      a: The total number of connections the server can ever accept
+      b: The queue of fully established connections waiting for accept()
+      c: The number of threads that can call accept()
+      d: The receive buffer size
+    answer: b
+    explanation: Since Linux 2.2 it limits the accept queue of completed connections, capped by net.core.somaxconn.
+
+  - id: net-udp-001
+    topic: networking/sockets
+    difficulty: easy
+    format: multiple_select
+    question: Which properties does UDP have? Select all that apply.
+    choices:
+      a: Preserves message boundaries
+      b: Guarantees delivery
+      c: Guarantees ordering
+      d: Connectionless
+    answer: [a, d]
+    explanation: Each datagram is delivered whole or not at all, possibly out of order or duplicated; there is no connection setup.
+
+  - id: net-byteorder-001
+    topic: networking/sockets
+    difficulty: easy
+    format: multiple_choice
+    question: Why are htons()/htonl() used when filling a sockaddr_in?
+    choices:
+      a: To encrypt the port
+      b: To convert from host byte order to network byte order (big-endian)
+      c: To validate the address
+      d: To convert IPv4 to IPv6
+    answer: b
+    explanation: Port and address fields in sockaddr_in are stored in network byte order.
+
+  - id: net-eintr-001
+    topic: networking/linux
+    difficulty: medium
+    format: multiple_choice
+    question: A blocking read() returns -1 with errno EINTR. What happened?
+    choices:
+      a: The connection was reset
+      b: A signal handler ran before any data was read; the call can usually be retried
+      c: The file descriptor is invalid
+      d: The buffer is too small
+    answer: b
+    explanation: Unless SA_RESTART applies, interrupted system calls fail with EINTR and robust code retries them.
+
+  - id: net-fd-001
+    topic: networking/linux
+    difficulty: medium
+    format: multiple_choice
+    question: What does the "Too many open files" error (EMFILE) from accept() mean?
+    choices:
+      a: The disk is full
+      b: The process hit its file-descriptor limit (RLIMIT_NOFILE)
+      c: The listen backlog is full
+      d: The client sent too much data
+    answer: b
+    explanation: Each socket uses a descriptor. Raise the limit (ulimit -n) and make sure connections are closed.
+
+  - id: net-cloexec-001
+    topic: networking/linux
+    difficulty: hard
+    format: multiple_choice
+    question: Why do servers create sockets with SOCK_CLOEXEC (or set FD_CLOEXEC)?
+    choices:
+      a: To close the socket automatically after one request
+      b: So that descriptors aren't inherited by child processes created with exec
+      c: To make the socket non-blocking
+      d: To enable keepalive
+    answer: b
+    explanation: Leaked descriptors keep connections and ports open in unrelated child processes.
+
+  - id: net-keepalive-001
+    topic: networking/tcp
+    difficulty: medium
+    format: true_false
+    question: Without keepalive or application-level heartbeats, a TCP connection whose peer machine lost power can appear open indefinitely on an idle reader.
+    answer: true
+    explanation: No segments are exchanged on an idle connection, so nothing reveals that the peer is gone.
+
+  - id: net-dns-001
+    topic: networking/sockets
+    difficulty: easy
+    format: multiple_choice
+    question: Which function resolves a host name and service into socket addresses for both IPv4 and IPv6?
+    choices:
+      a: gethostbyname
+      b: getaddrinfo
+      c: inet_aton
+      d: getsockname
+    answer: b
+    explanation: getaddrinfo is protocol-independent and thread-safe; gethostbyname is obsolete and IPv4-only.
+
+  - id: net-iouring-001
+    topic: networking/linux
+    difficulty: hard
+    format: multiple_choice
+    question: How does io_uring differ from epoll?
+    choices:
+      a: io_uring is a readiness API; epoll is a completion API
+      b: io_uring submits operations and reports their completion via shared ring buffers; epoll reports readiness and you still call read/write yourself
+      c: io_uring works only for disk files
+      d: They are the same API with different names
+    answer: b
+    explanation: epoll says "you can read now"; io_uring says "your read finished, here is the result", reducing syscalls.
+
+  - id: net-thundering-001
+    topic: networking/epoll
+    difficulty: hard
+    format: multiple_choice
+    question: Several threads each call epoll_wait on their own epoll instance that watches the same listening socket. One connection arrives and all wake up. What is this called and what flag mitigates it?
+    choices:
+      a: Head-of-line blocking; TCP_NODELAY
+      b: Thundering herd; EPOLLEXCLUSIVE
+      c: Priority inversion; SCHED_FIFO
+      d: Nagle effect; TCP_CORK
+    answer: b
+    explanation: EPOLLEXCLUSIVE (Linux 4.5) wakes only one (or a few) of the waiters. SO_REUSEPORT with one listener per thread is another approach.
+
+  - id: net-http-001
+    topic: networking/tcp
+    difficulty: medium
+    format: multiple_choice
+    question: A protocol frames messages with a 4-byte length prefix. A recv() returns 2 bytes. What must the parser do?
+    choices:
+      a: Treat the 2 bytes as a complete length
+      b: Keep the bytes in a buffer and wait for more before decoding the length
+      c: Discard them and resynchronise
+      d: Close the connection as malformed
+    answer: b
+    explanation: Stream sockets can deliver any split. Parsers accumulate bytes until a complete frame is available.
+
+  - id: net-predict-001
+    topic: networking/sockets
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      import struct
+      print(struct.pack("!H", 8080).hex(), struct.pack("<H", 8080).hex())
+    answer: 1f90 901f
+    explanation: "! is network (big-endian) order: 8080 = 0x1F90. Little-endian stores the low byte first."
+
+  - id: net-nagle-002
+    topic: networking/tcp
+    difficulty: hard
+    format: multiple_choice
+    question: A client does write(header) then write(body) and sees ~40 ms extra latency per request. What is the classic cause?
+    choices:
+      a: DNS lookups
+      b: Nagle's algorithm interacting with delayed ACKs on the server
+      c: TIME_WAIT
+      d: Slow start after every write
+    answer: b
+    explanation: The second small write waits for the ACK of the first, which the server delays. Fix with one writev() or TCP_NODELAY.
+
+  - id: net-sockopt-001
+    topic: networking/sockets
+    difficulty: medium
+    format: short_answer
+    question: Which errno does connect() report (via SO_ERROR) when nothing is listening on the remote port and the host answers with RST?
+    answer: ECONNREFUSED
+    explanation: An RST in response to SYN surfaces as ECONNREFUSED.
+
+  - id: net-epoll-del-001
+    topic: networking/epoll
+    difficulty: hard
+    format: true_false
+    question: Closing a file descriptor always removes it from every epoll interest list.
+    answer: false
+    explanation: >
+      epoll tracks the open file description. If the fd was dup()'ed (or inherited), closing one descriptor
+      leaves the registration active and events can still be reported. Use EPOLL_CTL_DEL before close.
+    references:
+      - man 7 epoll (Q6)

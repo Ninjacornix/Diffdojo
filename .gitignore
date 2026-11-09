@@ -1,0 +1,4 @@
+node_modules/
+*.log
+diffdojo-export-*.json
+diffdojo-badge.*

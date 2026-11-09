@@ -1,0 +1,403 @@
+questions:
+  - id: dsa-bs-001
+    topic: dsa/search
+    difficulty: easy
+    format: short_answer
+    question: What is the time complexity of binary search on a sorted array of n elements? (big-O)
+    answer: O(log n)
+    accept:
+      - o(logn)
+      - logarithmic
+      - o(log(n))
+    explanation: Each step halves the search interval.
+
+  - id: dsa-bs-002
+    topic: dsa/search
+    difficulty: medium
+    format: multiple_choice
+    question: "Why is `mid = lo + (hi - lo) / 2` preferred over `mid = (lo + hi) / 2` in C/C++/Java?"
+    choices:
+      a: It rounds differently
+      b: (lo + hi) can overflow for large indices
+      c: It is faster
+      d: It handles negative numbers
+    answer: b
+    explanation: A famous bug in many binary search implementations, including Java's for years.
+
+  - id: dsa-bs-003
+    topic: dsa/search
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      import bisect
+      xs = [1, 3, 3, 3, 7]
+      print(bisect.bisect_left(xs, 3), bisect.bisect_right(xs, 3), bisect.bisect_left(xs, 4))
+    answer: 1 4 4
+    explanation: bisect_left gives the first index where 3 could go (before equal elements), bisect_right the index after them.
+
+  - id: dsa-heap-001
+    topic: dsa/heaps
+    difficulty: easy
+    format: multiple_choice
+    question: What are the costs of push and pop on a binary heap with n elements?
+    choices:
+      a: O(1) push, O(1) pop
+      b: O(log n) push, O(log n) pop
+      c: O(n) push, O(1) pop
+      d: O(log n) push, O(n) pop
+    answer: b
+    explanation: Both sift up/down along one root-to-leaf path. Peeking at the top is O(1).
+
+  - id: dsa-heap-002
+    topic: dsa/heaps
+    difficulty: medium
+    format: multiple_choice
+    question: By default, std::priority_queue<int> pops which element first, and Python's heapq?
+    choices:
+      a: Both the smallest
+      b: Both the largest
+      c: priority_queue the largest; heapq the smallest
+      d: priority_queue the smallest; heapq the largest
+    answer: c
+    explanation: priority_queue is a max-heap with std::less; heapq is a min-heap. Use std::greater or negated keys to flip.
+
+  - id: dsa-heap-003
+    topic: dsa/heaps
+    difficulty: medium
+    format: short_answer
+    question: What is the time complexity of building a binary heap from n unsorted elements with heapify? (big-O)
+    answer: O(n)
+    accept:
+      - linear
+    explanation: Bottom-up heapify is O(n) because most nodes are near the leaves and sift down only a little.
+
+  - id: dsa-heap-004
+    topic: dsa/heaps
+    difficulty: medium
+    format: multiple_choice
+    question: What is the most efficient way to find the k largest of n numbers when k is much smaller than n?
+    choices:
+      a: Sort everything, O(n log n)
+      b: Keep a min-heap of size k, O(n log k)
+      c: Use a max-heap of all n elements and pop k times, O(n + k log n), which is always worse
+      d: Linear scan k times, O(nk)
+    answer: b
+    explanation: The min-heap keeps the current top k; each new element costs at most O(log k). (heapify + k pops is also fine.)
+
+  - id: dsa-hash-001
+    topic: dsa/hashing
+    difficulty: medium
+    format: multiple_choice
+    question: What is the worst-case lookup time of a hash table with chaining, and when does it happen?
+    choices:
+      a: O(1), never worse
+      b: O(n), when many keys collide into the same bucket
+      c: O(log n), when the table is full
+      d: O(n²), when resizing
+    answer: b
+    explanation: Bad hash functions or adversarial keys can put everything in one chain.
+
+  - id: dsa-hash-002
+    topic: dsa/hashing
+    difficulty: medium
+    format: true_false
+    question: Two objects that compare equal must have the same hash value for a hash table to work correctly.
+    answer: true
+    explanation: Otherwise lookups probe the wrong bucket. The converse is not required (collisions are allowed).
+
+  - id: dsa-sort-001
+    topic: dsa/sorting
+    difficulty: easy
+    format: multiple_choice
+    question: Which comparison sort has O(n log n) worst-case time and is stable?
+    choices:
+      a: Quicksort
+      b: Heapsort
+      c: Merge sort
+      d: Selection sort
+    answer: c
+    explanation: Quicksort is O(n²) worst case; heapsort is not stable.
+
+  - id: dsa-sort-002
+    topic: dsa/sorting
+    difficulty: medium
+    format: multiple_choice
+    question: What does it mean for a sort to be stable?
+    choices:
+      a: It never crashes
+      b: Elements with equal keys keep their relative order
+      c: It always runs in O(n log n)
+      d: It sorts in place
+    answer: b
+    explanation: Stability lets you sort by multiple keys in passes (least significant first).
+
+  - id: dsa-sort-003
+    topic: dsa/sorting
+    difficulty: hard
+    format: true_false
+    question: No comparison-based sorting algorithm can beat Ω(n log n) comparisons in the worst case.
+    answer: true
+    explanation: A decision tree must have n! leaves, so its height is at least log2(n!) = Θ(n log n). Counting/radix sort avoid comparisons.
+
+  - id: dsa-graph-001
+    topic: dsa/graphs
+    difficulty: easy
+    format: multiple_choice
+    question: Which algorithm finds shortest paths (fewest edges) in an unweighted graph?
+    choices:
+      a: Depth-first search
+      b: Breadth-first search
+      c: Dijkstra with negative weights
+      d: Topological sort
+    answer: b
+    explanation: BFS explores nodes in order of distance from the source.
+
+  - id: dsa-graph-002
+    topic: dsa/graphs
+    difficulty: medium
+    format: multiple_choice
+    question: Why does Dijkstra's algorithm fail with negative edge weights?
+    choices:
+      a: It can't handle cycles
+      b: Once a node is finalised, a later negative edge could still shorten its distance
+      c: Priority queues can't store negatives
+      d: It only works on trees
+    answer: b
+    explanation: Use Bellman-Ford when negative weights are possible (it also detects negative cycles).
+
+  - id: dsa-graph-003
+    topic: dsa/graphs
+    difficulty: medium
+    format: short_answer
+    question: Time complexity of Dijkstra with a binary heap on a graph with V vertices and E edges? (big-O)
+    answer: O((V + E) log V)
+    accept:
+      - o(elogv)
+      - o((e+v)logv)
+      - o(e log v)
+      - o((v+e)logv)
+    explanation: Each edge relaxation may push into the heap (O(log V)); each vertex is popped once.
+
+  - id: dsa-graph-004
+    topic: dsa/graphs
+    difficulty: medium
+    format: multiple_choice
+    question: What does a topological sort of a directed graph require?
+    choices:
+      a: The graph is undirected
+      b: The graph has no directed cycles (it is a DAG)
+      c: All edges have equal weight
+      d: The graph is connected
+    answer: b
+    explanation: Kahn's algorithm or DFS finishing order; a leftover node with in-degree > 0 means there is a cycle.
+
+  - id: dsa-graph-005
+    topic: dsa/graphs
+    difficulty: hard
+    format: multiple_choice
+    question: Recursive DFS on a 1,000,000-node path graph crashes in Python. Why, and what's the fix?
+    choices:
+      a: DFS is O(n²); use BFS
+      b: Recursion depth exceeds the limit (stack overflow); use an explicit stack
+      c: Python can't store that many nodes
+      d: The graph has a cycle
+    answer: b
+    explanation: Python's default recursion limit is about 1000; iterative DFS with a list as stack avoids it.
+
+  - id: dsa-dp-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: What two properties make a problem a good fit for dynamic programming?
+    choices:
+      a: Greedy choice and sorted input
+      b: Optimal substructure and overlapping subproblems
+      c: Random access and constant time
+      d: Recursion and backtracking
+    answer: b
+    explanation: Overlapping subproblems are what make memoisation pay off.
+
+  - id: dsa-dp-002
+    topic: dsa/core
+    difficulty: medium
+    format: short_answer
+    question: Naive recursive Fibonacci fib(n) = fib(n-1) + fib(n-2) runs in roughly what time? (big-O)
+    answer: O(2^n)
+    accept:
+      - exponential
+      - o(1.618^n)
+      - o(phi^n)
+      - o(2**n)
+    explanation: The call tree is exponential (Θ(φ^n)); memoisation makes it O(n).
+
+  - id: dsa-lru-001
+    topic: dsa/core
+    difficulty: hard
+    format: multiple_choice
+    question: Which combination gives an LRU cache O(1) get and put?
+    choices:
+      a: A sorted array
+      b: A hash map from key to node plus a doubly linked list ordered by recency
+      c: A binary heap keyed by access time
+      d: A balanced BST
+    answer: b
+    explanation: The map finds the node; the list moves it to the front and evicts from the back in O(1). (A heap would be O(log n).)
+
+  - id: dsa-amort-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: A dynamic array grows by adding a constant 10 slots whenever it is full instead of doubling. What is the total cost of n appends?
+    choices:
+      a: O(n)
+      b: O(n log n)
+      c: O(n²)
+      d: O(1)
+    answer: c
+    explanation: Each growth copies the array, about n/10 times, giving quadratic total work. Geometric growth gives O(n).
+
+  - id: dsa-twoptr-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: To find whether a sorted array has two elements summing to t, which approach is O(n) time and O(1) extra space?
+    choices:
+      a: Check all pairs
+      b: Two pointers, one at each end, moving inward based on the current sum
+      c: Binary search for each element, O(n log n)
+      d: Hash set of seen values, O(n) space
+    answer: b
+    explanation: If the sum is too small, advance the left pointer; if too large, move the right pointer left.
+
+  - id: dsa-ll-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: How do you detect a cycle in a singly linked list with O(1) extra space?
+    choices:
+      a: Store visited nodes in a set
+      b: Floyd's tortoise and hare — a slow and a fast pointer meet if there is a cycle
+      c: Reverse the list
+      d: Sort the nodes
+    answer: b
+    explanation: The fast pointer gains one step per iteration and must catch the slow one inside a cycle.
+
+  - id: dsa-trie-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: What is a trie best at?
+    choices:
+      a: Range sums
+      b: Prefix queries such as autocomplete, in time proportional to the key length
+      c: Shortest paths
+      d: Sorting integers
+    answer: b
+    explanation: Lookup cost depends on key length, not on the number of stored keys.
+
+  - id: dsa-uf-001
+    topic: dsa/graphs
+    difficulty: hard
+    format: multiple_choice
+    question: Which two optimisations make union-find (disjoint set union) nearly constant time per operation?
+    choices:
+      a: Sorting and hashing
+      b: Path compression and union by rank/size
+      c: Memoisation and recursion
+      d: Two pointers and sliding window
+    answer: b
+    explanation: Together they give O(α(n)) amortized, where α is the inverse Ackermann function.
+
+  - id: dsa-bloom-001
+    topic: dsa/hashing
+    difficulty: hard
+    format: true_false
+    question: A Bloom filter can return false positives but never false negatives.
+    answer: true
+    explanation: All bits for an inserted element are set, so a member is always reported; collisions can make a non-member look present.
+
+  - id: dsa-complexity-001
+    topic: dsa/core
+    difficulty: easy
+    format: ordering
+    question: Order these complexities from fastest-growing to slowest-growing for large n.
+    items:
+      a: O(n log n)
+      b: O(2^n)
+      c: O(log n)
+      d: O(n²)
+    answer: [b, d, a, c]
+    explanation: Exponential > quadratic > linearithmic > logarithmic.
+
+  - id: dsa-predict-001
+    topic: dsa/heaps
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      import heapq
+      h = []
+      for x in [5, 1, 4, 2]:
+          heapq.heappush(h, x)
+      print(heapq.heappop(h), h[0], len(h))
+    answer: 1 2 3
+    explanation: heapq is a min-heap; after popping 1 the new minimum 2 is at index 0.
+
+  - id: dsa-predict-002
+    topic: dsa/core
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      #include <map>
+      int main() {
+          std::map<int, char> m{{3, 'c'}, {1, 'a'}, {2, 'b'}};
+          for (auto& [k, v] : m) std::cout << v;
+          std::cout << " " << m.lower_bound(2)->second << m.upper_bound(2)->second << "\n";
+      }
+    answer: abc bc
+    explanation: std::map iterates in key order; lower_bound(2) is 2 itself, upper_bound(2) the first key greater than 2.
+
+  - id: dsa-window-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: Longest substring without repeating characters can be found in O(n) with which technique?
+    choices:
+      a: Sliding window with a map of last-seen positions
+      b: Sorting the string
+      c: Dynamic programming over all substrings, O(n²)
+      d: Binary search on the answer only
+    answer: a
+    explanation: Move the left edge past the previous occurrence whenever a repeat enters the window.
+
+  - id: dsa-backoff-001
+    topic: dsa/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why add random jitter to exponential backoff for retries?
+    choices:
+      a: To keep retries deterministic
+      b: To spread retries out so many clients don't retry in lockstep after an outage
+      c: To make the delay shorter on average
+      d: It is required by TCP
+    answer: b
+    explanation: Synchronised retries create load spikes (thundering herd); jitter de-correlates them.
+
+  - id: dsa-tokenbucket-001
+    topic: dsa/core
+    difficulty: hard
+    format: multiple_choice
+    question: What does a token bucket rate limiter allow that a fixed "N requests per second" window does not?
+    choices:
+      a: Unlimited bursts
+      b: Short bursts up to the bucket capacity while still enforcing the long-run average rate
+      c: Exactly evenly spaced requests only
+      d: Priority between clients
+    answer: b
+    explanation: Tokens accrue at the refill rate up to a maximum; a burst may spend the stored tokens.

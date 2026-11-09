@@ -1,0 +1,285 @@
+questions:
+  - id: js-eq-001
+    topic: javascript/core
+    difficulty: easy
+    format: multiple_choice
+    question: Why do style guides prefer === over ==?
+    choices:
+      a: === is faster in all engines
+      b: == performs type coercion with surprising rules (e.g. "0" == 0 and 0 == ""), while === compares without coercion
+      c: == doesn't work on objects
+      d: === compares deeply
+    answer: b
+    explanation: Neither compares objects deeply; both compare object references.
+
+  - id: js-event-loop-001
+    topic: javascript/async
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const out = [];
+      setTimeout(() => out.push("timeout"), 0);
+      Promise.resolve().then(() => out.push("micro"));
+      out.push("sync");
+      setTimeout(() => console.log(out.join(" ")), 10);
+    answer: sync micro timeout
+    explanation: Synchronous code runs first, then the microtask queue (promise callbacks), then macrotasks such as timers.
+
+  - id: js-await-001
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: "What is wrong with `items.forEach(async (it) => { await save(it); }); console.log('done');`?"
+    choices:
+      a: Nothing
+      b: forEach doesn't wait for the async callbacks, so "done" is logged before the saves finish (and errors become unhandled rejections)
+      c: It's a syntax error
+      d: The saves run strictly one after another
+    answer: b
+    explanation: Use `for (const it of items) await save(it);` for sequential work or `await Promise.all(items.map(save))` for parallel work.
+
+  - id: js-await-002
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: What does an async function return?
+    choices:
+      a: The value of its return statement directly
+      b: A Promise that resolves to the returned value (or rejects with a thrown error)
+      c: undefined
+      d: A generator
+    answer: b
+    explanation: Even `async () => 1` returns Promise<1>; callers must await or .then it.
+
+  - id: js-promise-all-001
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: How do Promise.all and Promise.allSettled differ?
+    choices:
+      a: They are identical
+      b: Promise.all rejects as soon as one input rejects; allSettled waits for all and reports each outcome
+      c: allSettled runs promises sequentially
+      d: Promise.all ignores rejections
+    answer: b
+    explanation: Promise.all is fail-fast; the other promises keep running but their results are ignored.
+
+  - id: js-closure-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const fs = [];
+      for (var i = 0; i < 3; i++) fs.push(() => i);
+      const gs = [];
+      for (let j = 0; j < 3; j++) gs.push(() => j);
+      console.log(fs.map((f) => f()).join(""), gs.map((g) => g()).join(""));
+    answer: 333 012
+    explanation: var is function-scoped (one shared i); let creates a fresh binding per loop iteration.
+
+  - id: js-this-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why does passing `obj.method` as a callback often lose `this`?
+    choices:
+      a: Callbacks are always called with this = obj
+      b: A regular function's this is set by how it is called; a detached reference is called without obj, so this is undefined (strict mode)
+      c: Arrow functions change this
+      d: Because of hoisting
+    answer: b
+    explanation: Use obj.method.bind(obj), an arrow wrapper, or define the method as an arrow class field.
+
+  - id: js-arrow-001
+    topic: javascript/core
+    difficulty: easy
+    format: true_false
+    question: Arrow functions have their own `this` binding determined by how they are called.
+    answer: false
+    explanation: Arrow functions capture this lexically from the enclosing scope.
+
+  - id: js-const-001
+    topic: javascript/core
+    difficulty: easy
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const xs = [1, 2];
+      xs.push(3);
+      console.log(xs.length);
+    answer: "3"
+    explanation: const prevents rebinding the name, not mutating the object it refers to.
+
+  - id: js-sort-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log([10, 9, 1, 100].sort().join(","));
+    answer: 1,10,100,9
+    explanation: Without a comparator, sort converts elements to strings and compares them lexicographically. Use (a, b) => a - b.
+
+  - id: js-float-001
+    topic: javascript/core
+    difficulty: easy
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(0.1 + 0.2 === 0.3, Number.MAX_SAFE_INTEGER + 2);
+    answer: false 9007199254740992
+    explanation: Numbers are IEEE-754 doubles; integers above 2^53 lose precision (use BigInt).
+
+  - id: js-map-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: When is a Map better than a plain object for a dictionary?
+    choices:
+      a: When keys may be non-strings, insertion order matters for all key types, or keys could collide with prototype properties like "__proto__"
+      b: Never
+      c: Only for numeric keys
+      d: When you need JSON.stringify to work directly
+    answer: a
+    explanation: Map also has O(1) size and is designed for frequent additions/removals.
+
+  - id: js-weakmap-001
+    topic: javascript/core
+    difficulty: hard
+    format: multiple_choice
+    question: What is a WeakMap useful for?
+    choices:
+      a: Storing primitive keys efficiently
+      b: Associating data with objects without preventing those objects from being garbage-collected
+      c: Iterating keys in insertion order
+      d: Thread-safe maps
+    answer: b
+    explanation: Keys must be objects and are held weakly; WeakMaps are not iterable.
+
+  - id: js-unhandled-001
+    topic: javascript/async
+    difficulty: medium
+    format: true_false
+    question: In recent Node.js versions, an unhandled promise rejection terminates the process by default.
+    answer: true
+    explanation: Since Node 15 the default mode is "throw", which crashes the process with the rejection reason.
+
+  - id: js-ts-001
+    topic: javascript/typescript
+    difficulty: easy
+    format: true_false
+    question: TypeScript types are checked at compile time and erased, so they don't validate data at runtime.
+    answer: true
+    explanation: Validate external input (JSON, HTTP bodies) with a runtime schema; `as T` is only an assertion to the compiler.
+
+  - id: js-ts-002
+    topic: javascript/typescript
+    difficulty: medium
+    format: multiple_choice
+    question: What is the difference between `unknown` and `any` in TypeScript?
+    choices:
+      a: None
+      b: any disables type checking; unknown accepts any value but must be narrowed before use
+      c: unknown is for numbers only
+      d: any cannot hold null
+    answer: b
+    explanation: Prefer unknown for values whose type you have not checked yet.
+
+  - id: js-ts-003
+    topic: javascript/typescript
+    difficulty: medium
+    format: multiple_choice
+    question: "What does a discriminated union like `type Shape = {kind: 'c', r: number} | {kind: 's', side: number}` enable?"
+    choices:
+      a: Runtime type checking
+      b: Narrowing by checking the shared literal field (kind), with exhaustiveness checks via never
+      c: Inheritance
+      d: Generics
+    answer: b
+    explanation: A switch on kind narrows each branch; assigning the leftover to never catches unhandled cases.
+
+  - id: js-nullish-001
+    topic: javascript/core
+    difficulty: easy
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const port = 0;
+      console.log(port || 8080, port ?? 8080);
+    answer: 8080 0
+    explanation: "|| falls back on any falsy value (0, '', false); ?? only on null or undefined."
+
+  - id: js-hoist-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: Accessing a `let` variable before its declaration in the same scope does what?
+    choices:
+      a: Returns undefined
+      b: Throws a ReferenceError (temporal dead zone)
+      c: Returns null
+      d: Uses the global variable of the same name
+    answer: b
+    explanation: let/const are hoisted but uninitialised until the declaration runs; var would give undefined.
+
+  - id: js-spread-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const a = { user: { name: "x" }, n: 1 };
+      const b = { ...a };
+      b.n = 2;
+      b.user.name = "y";
+      console.log(a.n, a.user.name);
+    answer: 1 y
+    explanation: Spread makes a shallow copy; the nested object is shared. Use structuredClone for a deep copy.
+
+  - id: js-stream-001
+    topic: javascript/async
+    difficulty: hard
+    format: multiple_choice
+    question: Node's writable.write() returns false. What should a well-behaved producer do?
+    choices:
+      a: Ignore it
+      b: Stop writing until the 'drain' event fires (backpressure)
+      c: Throw an error
+      d: Call write() again immediately
+    answer: b
+    explanation: Ignoring backpressure buffers unboundedly in memory. pipeline() handles it for you.
+
+  - id: js-cpu-001
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: A Node.js HTTP server becomes unresponsive while computing a large hash in a request handler. Why?
+    choices:
+      a: Hashing is asynchronous
+      b: CPU-bound work runs on the single event-loop thread and blocks all other requests
+      c: Node limits each request to one CPU
+      d: The GC is disabled
+    answer: b
+    explanation: Offload CPU-heavy work to worker_threads, a child process, or async APIs backed by the libuv thread pool.
+
+  - id: js-order-001
+    topic: javascript/async
+    difficulty: hard
+    format: ordering
+    question: Order when these callbacks run, scheduled from the same synchronous CommonJS script in Node.js.
+    items:
+      a: setTimeout(fn, 0)
+      b: process.nextTick(fn)
+      c: Promise.resolve().then(fn)
+      d: Synchronous console.log
+    answer: [d, b, c, a]
+    explanation: Synchronous code, then the nextTick queue, then promise microtasks, then timers.

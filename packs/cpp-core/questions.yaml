@@ -1,0 +1,653 @@
+questions:
+  - id: cpp-move-001
+    topic: cpp/core/memory
+    difficulty: easy
+    format: multiple_choice
+    question: What does std::move(x) actually do?
+    choices:
+      a: Moves the contents of x into a new object immediately
+      b: Casts x to an rvalue reference so a move constructor or move assignment can be selected
+      c: Marks x as destroyed so its destructor is skipped
+      d: Copies x and then clears the original
+    answer: b
+    explanation: >
+      std::move is just a static_cast to T&&. Nothing is moved until that rvalue
+      is used to initialise or assign another object, which picks the move overload.
+    references:
+      - cppreference std::move
+
+  - id: cpp-move-002
+    topic: cpp/core/memory
+    difficulty: medium
+    format: multiple_choice
+    question: After `std::string b = std::move(a);` what may you portably do with `a`?
+    choices:
+      a: Nothing at all; any use is undefined behaviour
+      b: Only call its destructor
+      c: Use operations with no preconditions, such as assigning a new value, calling clear() or size()
+      d: Read its old value, which is guaranteed to be unchanged
+    answer: c
+    explanation: >
+      Standard library types are left in a "valid but unspecified" state after a move.
+      Operations without preconditions (assignment, clear, size, destruction) are fine;
+      relying on the specific value is not.
+    references:
+      - "[lib.types.movedfrom]"
+
+  - id: cpp-move-003
+    topic: cpp/core/memory
+    difficulty: medium
+    format: true_false
+    question: Declaring a user-provided destructor suppresses the implicitly declared move constructor and move assignment operator.
+    answer: true
+    explanation: >
+      If a class declares a destructor, copy operation or the other move operation,
+      the implicit move operations are not declared. Moves then silently fall back to copies.
+    references:
+      - cppreference "Rule of three/five/zero"
+
+  - id: cpp-move-004
+    topic: cpp/core/memory
+    difficulty: hard
+    format: multiple_choice
+    question: Why should a move constructor usually be marked noexcept?
+    choices:
+      a: The compiler refuses to generate move constructors otherwise
+      b: std::vector uses std::move_if_noexcept on reallocation, so a throwing move makes it copy elements instead
+      c: noexcept makes the move constructor run at compile time
+      d: Without noexcept the moved-from object is destroyed twice
+    answer: b
+    explanation: >
+      To keep the strong exception guarantee, vector only moves elements during growth
+      if the move constructor cannot throw (or the type is not copyable). Otherwise it copies.
+    references:
+      - cppreference std::move_if_noexcept
+
+  - id: cpp-rvo-001
+    topic: cpp/core/memory
+    difficulty: medium
+    format: multiple_choice
+    question: In C++17, what happens for `T make() { return T{}; }` when called as `T t = make();`?
+    choices:
+      a: One temporary is created and then moved into t
+      b: One temporary is created and copied into t
+      c: No temporary is materialised; the prvalue initialises t directly (guaranteed copy elision)
+      d: The behaviour depends on optimisation level only
+    answer: c
+    explanation: >
+      Since C++17 a prvalue is not a temporary object; it initialises its final target directly.
+      T does not even need an accessible copy or move constructor for this case.
+
+  - id: cpp-rvo-002
+    topic: cpp/core/memory
+    difficulty: hard
+    format: true_false
+    question: Writing `return std::move(local);` for a local variable usually helps performance.
+    answer: false
+    explanation: >
+      It prevents named return value optimisation (NRVO), forcing a move where the copy could
+      have been elided entirely. Returning a local by name already treats it as an rvalue.
+
+  - id: cpp-raii-001
+    topic: cpp/core
+    difficulty: easy
+    format: multiple_choice
+    question: What is the core idea of RAII?
+    choices:
+      a: Resources are acquired in a constructor and released in the destructor, tying them to object lifetime
+      b: All resources are allocated at program start and released at exit
+      c: Raw pointers must always be checked for null before use
+      d: Every class must have a virtual destructor
+    answer: a
+    explanation: >
+      Resource Acquisition Is Initialization binds a resource to an object's lifetime so that
+      scope exit (including via exceptions) releases it deterministically.
+
+  - id: cpp-smart-001
+    topic: cpp/core/memory
+    difficulty: easy
+    format: multiple_choice
+    question: Which smart pointer expresses sole ownership and cannot be copied?
+    choices:
+      a: std::shared_ptr
+      b: std::weak_ptr
+      c: std::unique_ptr
+      d: std::auto_ptr
+    answer: c
+    explanation: unique_ptr is move-only and owns its object exclusively. (auto_ptr was removed in C++17.)
+
+  - id: cpp-smart-002
+    topic: cpp/core/memory
+    difficulty: medium
+    format: multiple_choice
+    question: Two objects hold std::shared_ptr to each other and nothing else refers to them. What happens?
+    choices:
+      a: Both are destroyed when the last external shared_ptr goes away
+      b: They leak, because each keeps the other's reference count above zero
+      c: The program terminates with a cycle-detection error
+      d: The garbage collector reclaims them later
+    answer: b
+    explanation: >
+      shared_ptr uses reference counting, which can't collect cycles. Break the cycle with
+      std::weak_ptr for the back-reference.
+
+  - id: cpp-smart-003
+    topic: cpp/core/memory
+    difficulty: medium
+    format: multiple_choice
+    question: Why is std::make_shared often preferred over `std::shared_ptr<T>(new T(...))`?
+    choices:
+      a: It allows custom deleters
+      b: It allocates the object and the control block in one allocation
+      c: It makes the object immutable
+      d: It disables reference counting for single-threaded programs
+    answer: b
+    explanation: >
+      make_shared does a single allocation for object + control block, improving locality and
+      avoiding a leak if another argument's evaluation throws (pre-C++17 ordering).
+
+  - id: cpp-smart-004
+    topic: cpp/core/memory
+    difficulty: hard
+    format: true_false
+    question: Incrementing a std::shared_ptr's reference count is atomic, so it is safe for two threads to modify the same shared_ptr object without synchronisation.
+    answer: false
+    explanation: >
+      The control block's count is updated atomically, so different shared_ptr copies may be used
+      concurrently. Writing to the same shared_ptr instance from two threads is a data race;
+      use std::atomic<std::shared_ptr<T>> (C++20) or a mutex.
+
+  - id: cpp-ub-001
+    topic: cpp/core/ub
+    difficulty: medium
+    format: multiple_select
+    question: Which of these are undefined behaviour in C++? Select all that apply.
+    choices:
+      a: Signed integer overflow
+      b: Unsigned integer overflow
+      c: Reading an uninitialised int local variable
+      d: Dereferencing a null pointer
+    answer: [a, c, d]
+    explanation: >
+      Unsigned arithmetic wraps modulo 2^N by definition. Signed overflow, reading indeterminate
+      values (for non-byte types) and null dereference are UB.
+
+  - id: cpp-ub-002
+    topic: cpp/core/ub
+    difficulty: hard
+    format: multiple_choice
+    question: "Given `int f(int x) { return x + 1 > x; }`, what may an optimising compiler do?"
+    choices:
+      a: Must emit an add and a compare, because x could be INT_MAX
+      b: May compile it to `return 1;` because signed overflow is undefined
+      c: Must return 0 when x == INT_MAX
+      d: Must trap at runtime on overflow
+    answer: b
+    explanation: >
+      Because signed overflow can't happen in a valid program, the compiler may assume
+      x + 1 > x always holds and fold it to true.
+
+  - id: cpp-ub-003
+    topic: cpp/core/ub
+    difficulty: medium
+    format: multiple_choice
+    question: What is wrong with `const std::string& name() { std::string s = "x"; return s; }`?
+    choices:
+      a: Nothing; the reference extends the lifetime of s
+      b: It returns a dangling reference to a destroyed local
+      c: It fails to compile because s is not const
+      d: It copies s twice
+    answer: b
+    explanation: >
+      Lifetime extension applies to temporaries bound directly to a local reference, not to
+      returning a reference to a local. s is destroyed when the function returns.
+
+  - id: cpp-ub-004
+    topic: cpp/core/ub
+    difficulty: medium
+    format: multiple_choice
+    question: "`std::vector<int> v{1,2,3}; int& r = v[0]; v.push_back(4);` — what about r afterwards?"
+    choices:
+      a: r is still valid and equals 1
+      b: r may dangle, because push_back can reallocate and invalidate all references
+      c: r now refers to the new element 4
+      d: The code does not compile
+    answer: b
+    explanation: If size() exceeds capacity(), push_back reallocates and invalidates every iterator, pointer and reference.
+
+  - id: cpp-vec-001
+    topic: cpp/core/containers
+    difficulty: easy
+    format: multiple_choice
+    question: What is the difference between reserve(n) and resize(n) on a std::vector?
+    choices:
+      a: They are synonyms
+      b: reserve changes capacity only; resize changes the number of elements (value-initialising new ones)
+      c: reserve shrinks the vector; resize grows it
+      d: resize only works on empty vectors
+    answer: b
+    explanation: reserve preallocates storage without changing size(); resize adds or removes elements.
+
+  - id: cpp-vec-002
+    topic: cpp/core/containers
+    difficulty: medium
+    format: short_answer
+    question: What is the amortized time complexity of std::vector::push_back? (big-O)
+    answer: O(1)
+    accept:
+      - "o(1) amortized"
+      - constant
+      - amortized o(1)
+    explanation: Geometric growth makes the total cost of n push_backs O(n), so O(1) amortized each.
+
+  - id: cpp-map-001
+    topic: cpp/core/containers
+    difficulty: medium
+    format: multiple_choice
+    question: "What does `m[key]` do on a std::map when key is absent?"
+    choices:
+      a: Throws std::out_of_range
+      b: Returns a default-constructed value without modifying the map
+      c: Inserts a value-initialised element for key and returns a reference to it
+      d: Undefined behaviour
+    answer: c
+    explanation: operator[] inserts if missing (and so can't be used on a const map). Use find() or at() to avoid insertion.
+
+  - id: cpp-map-002
+    topic: cpp/core/containers
+    difficulty: medium
+    format: multiple_choice
+    question: When is std::map preferable to std::unordered_map?
+    choices:
+      a: When you need O(1) average lookup
+      b: When you need keys iterated in sorted order or ordered queries like lower_bound
+      c: When keys have no ordering but are hashable
+      d: Never; unordered_map is strictly better
+    answer: b
+    explanation: map is a balanced tree with O(log n) operations and ordered traversal; unordered_map is a hash table with no order.
+
+  - id: cpp-map-003
+    topic: cpp/core/containers
+    difficulty: hard
+    format: true_false
+    question: Inserting into a std::unordered_map can invalidate iterators but never references to existing elements.
+    answer: true
+    explanation: >
+      A rehash invalidates iterators, but elements live in nodes that don't move, so pointers
+      and references to elements stay valid.
+
+  - id: cpp-erase-001
+    topic: cpp/core/containers
+    difficulty: medium
+    format: multiple_choice
+    question: Which loop correctly erases even numbers from a std::vector<int> v?
+    choices:
+      a: "for (auto it = v.begin(); it != v.end(); ++it) if (*it % 2 == 0) v.erase(it);"
+      b: "for (auto it = v.begin(); it != v.end();) { if (*it % 2 == 0) it = v.erase(it); else ++it; }"
+      c: "for (size_t i = 0; i < v.size(); ++i) if (v[i] % 2 == 0) v.erase(v.begin() + i);"
+      d: "for (int x : v) if (x % 2 == 0) v.erase(std::find(v.begin(), v.end(), x));"
+    answer: b
+    explanation: >
+      erase returns the next valid iterator. (a) uses an invalidated iterator, (c) skips the
+      element after each erase, (d) modifies the container during range-for. C++20 also has std::erase_if.
+
+  - id: cpp-virt-001
+    topic: cpp/core/oop
+    difficulty: easy
+    format: multiple_choice
+    question: Why should a polymorphic base class have a virtual destructor?
+    choices:
+      a: So that deleting a derived object through a base pointer runs the derived destructor
+      b: To make the class abstract
+      c: To allow copying derived objects
+      d: Virtual destructors are faster
+    answer: a
+    explanation: Deleting a derived object via a base pointer without a virtual destructor is undefined behaviour.
+
+  - id: cpp-virt-002
+    topic: cpp/core/oop
+    difficulty: medium
+    format: multiple_choice
+    question: What is object slicing?
+    choices:
+      a: Splitting a large object across cache lines
+      b: Copying a derived object into a base object by value, losing the derived part
+      c: Calling a virtual function from a constructor
+      d: Using multiple inheritance with a shared base
+    answer: b
+    explanation: Passing or assigning a Derived to a Base by value copies only the Base subobject; virtual dispatch on the copy uses Base.
+
+  - id: cpp-virt-003
+    topic: cpp/core/oop
+    difficulty: hard
+    format: multiple_choice
+    question: What happens when a constructor of Base calls a virtual function that Derived overrides?
+    choices:
+      a: Derived's override is called
+      b: Base's version is called, because the Derived part isn't constructed yet
+      c: Compilation error
+      d: It always calls a pure virtual stub and aborts
+    answer: b
+    explanation: During Base's constructor the dynamic type is Base. (If the function is pure virtual in Base, the call is undefined behaviour.)
+
+  - id: cpp-override-001
+    topic: cpp/core/oop
+    difficulty: easy
+    format: true_false
+    question: The override specifier makes the compiler reject a member function that does not actually override a base virtual function.
+    answer: true
+    explanation: It catches signature mismatches (e.g. a missing const) that would otherwise silently declare a new function.
+
+  - id: cpp-const-001
+    topic: cpp/core
+    difficulty: medium
+    format: multiple_choice
+    question: "What does `mutable` on a data member allow?"
+    choices:
+      a: The member can be modified inside const member functions
+      b: The member can be changed by other threads safely
+      c: The member is re-initialised on every copy
+      d: The member may be reassigned to a different type
+    answer: a
+    explanation: Typical uses are caches and mutexes that don't change the logical state. It says nothing about thread safety.
+
+  - id: cpp-constexpr-001
+    topic: cpp/core/templates
+    difficulty: medium
+    format: true_false
+    question: A constexpr function is always evaluated at compile time.
+    answer: false
+    explanation: >
+      constexpr functions may be evaluated at compile time when used in a constant expression,
+      but are ordinary runtime calls otherwise. consteval (C++20) forces compile-time evaluation.
+
+  - id: cpp-tmpl-001
+    topic: cpp/core/templates
+    difficulty: medium
+    format: multiple_choice
+    question: Why are templates usually defined in headers?
+    choices:
+      a: Because templates cannot be compiled at all
+      b: Because the compiler needs the definition to instantiate the template for each set of arguments in every translation unit that uses it
+      c: Because the linker merges all headers into one object file
+      d: It is a style convention with no technical reason
+    answer: b
+    explanation: Instantiation happens at the point of use. Without the definition (or explicit instantiation elsewhere) you get link errors.
+
+  - id: cpp-tmpl-002
+    topic: cpp/core/templates
+    difficulty: hard
+    format: multiple_choice
+    question: "In `template<class T> void f(T&& x)`, what is T&&?"
+    choices:
+      a: Always an rvalue reference
+      b: A forwarding (universal) reference that binds to lvalues and rvalues; use std::forward<T>(x) to preserve the value category
+      c: A reference to a reference, which is ill-formed
+      d: A const reference
+    answer: b
+    explanation: With template argument deduction, T&& collapses to T& for lvalues. std::forward re-applies the original category.
+
+  - id: cpp-auto-001
+    topic: cpp/core
+    difficulty: medium
+    format: multiple_choice
+    question: "Given `const std::vector<int>& v = get(); auto x = v;`, what is the type of x?"
+    choices:
+      a: const std::vector<int>&
+      b: std::vector<int>&
+      c: std::vector<int> (a copy)
+      d: const std::vector<int>
+    answer: c
+    explanation: auto drops references and top-level const, so x is a new vector copied from v. Use auto& or const auto& to bind.
+
+  - id: cpp-range-for-001
+    topic: cpp/core
+    difficulty: easy
+    format: multiple_choice
+    question: "`for (auto x : items) x.count++;` — what happens to items?"
+    choices:
+      a: Each element's count is incremented
+      b: Nothing; x is a copy of each element
+      c: Compilation error
+      d: Only the first element changes
+    answer: b
+    explanation: Use `for (auto& x : items)` to modify the elements in place.
+
+  - id: cpp-string-view-001
+    topic: cpp/core/memory
+    difficulty: hard
+    format: multiple_choice
+    question: "What is wrong with `std::string_view sv = std::string(\"abc\") + \"d\";` followed by using sv?"
+    choices:
+      a: Nothing
+      b: sv refers to a temporary string destroyed at the end of the full expression, so it dangles
+      c: string_view cannot be constructed from std::string
+      d: It copies the string twice
+    answer: b
+    explanation: string_view does not own data and does not extend the temporary's lifetime.
+
+  - id: cpp-init-001
+    topic: cpp/core
+    difficulty: medium
+    format: multiple_choice
+    question: "What does `std::vector<int> v(3, 5);` create, compared with `std::vector<int> w{3, 5};`?"
+    choices:
+      a: Both contain {3, 5}
+      b: v contains {5, 5, 5}; w contains {3, 5}
+      c: v contains {3, 5}; w contains {5, 5, 5}
+      d: Both contain {5, 5, 5}
+    answer: b
+    explanation: Braces prefer the initializer_list constructor; parentheses select the (count, value) constructor.
+
+  - id: cpp-noexcept-001
+    topic: cpp/core
+    difficulty: medium
+    format: multiple_choice
+    question: What happens if an exception escapes a function declared noexcept?
+    choices:
+      a: The exception propagates normally
+      b: std::terminate is called
+      c: The exception is silently swallowed
+      d: Undefined behaviour
+    answer: b
+    explanation: The runtime calls std::terminate (stack unwinding may or may not happen).
+
+  - id: cpp-exc-001
+    topic: cpp/core
+    difficulty: hard
+    format: true_false
+    question: Throwing an exception from a destructor during stack unwinding caused by another exception calls std::terminate.
+    answer: true
+    explanation: Two active exceptions can't be handled. Destructors are also implicitly noexcept since C++11.
+
+  - id: cpp-sizeof-001
+    topic: cpp/core
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      struct A { char c; int i; };
+      struct B { char c1; char c2; int i; };
+      int main() {
+          std::cout << (sizeof(A) == sizeof(B)) << "\n";
+      }
+    answer: "1"
+    explanation: >
+      On common ABIs int is 4-byte aligned, so A = 1 + 3 padding + 4 = 8 and B = 1 + 1 + 2 padding + 4 = 8.
+      Padding, not the number of members, decides the size.
+
+  - id: cpp-predict-002
+    topic: cpp/core
+    difficulty: easy
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      int main() {
+          int a = 7, b = 2;
+          std::cout << a / b << " " << a % b << " " << -a / b << "\n";
+      }
+    answer: 3 1 -3
+    explanation: Integer division truncates toward zero, so -7 / 2 is -3 (and -7 % 2 would be -1).
+
+  - id: cpp-predict-003
+    topic: cpp/core/memory
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      #include <string>
+      #include <utility>
+      int main() {
+          std::string a = "hello";
+          std::string b = std::move(a);
+          a = "x";
+          std::cout << b << a << b.size() << "\n";
+      }
+    answer: hellox5
+    explanation: b took a's contents; assigning a new value to the moved-from a is fine.
+
+  - id: cpp-predict-004
+    topic: cpp/core/oop
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      struct Base { virtual const char* name() const { return "Base"; } virtual ~Base() = default; };
+      struct Derived : Base { const char* name() const override { return "Derived"; } };
+      void show(Base b) { std::cout << b.name() << " "; }
+      void show_ref(const Base& b) { std::cout << b.name() << "\n"; }
+      int main() {
+          Derived d;
+          show(d);
+          show_ref(d);
+      }
+    answer: Base Derived
+    explanation: Passing by value slices d into a Base; passing by reference keeps dynamic dispatch.
+
+  - id: cpp-predict-005
+    topic: cpp/core
+    difficulty: hard
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      struct Noisy {
+          Noisy() { std::cout << "C"; }
+          Noisy(const Noisy&) { std::cout << "K"; }
+          Noisy(Noisy&&) noexcept { std::cout << "M"; }
+          ~Noisy() { std::cout << "D"; }
+      };
+      Noisy make() { return Noisy{}; }
+      int main() {
+          Noisy n = make();
+          std::cout << "|";
+      }
+    answer: C|D
+    explanation: Guaranteed copy elision (C++17) constructs the prvalue directly in n, so there is no copy or move.
+
+  - id: cpp-unsigned-001
+    topic: cpp/core/ub
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      #include <vector>
+      int main() {
+          std::vector<int> v;
+          std::cout << (v.size() - 1 > 0) << "\n";
+      }
+    answer: "1"
+    explanation: size() is unsigned, so 0 - 1 wraps to SIZE_MAX, which is > 0. Loops like `i < v.size() - 1` break on empty vectors.
+
+  - id: cpp-lambda-001
+    topic: cpp/core
+    difficulty: medium
+    format: multiple_choice
+    question: "What is the risk of `[&]` capture in a lambda stored and called later (e.g. a callback)?"
+    choices:
+      a: None; references are always valid
+      b: Captured references may dangle if the referenced locals have gone out of scope
+      c: It copies every variable, which is slow
+      d: It makes the lambda non-copyable
+    answer: b
+    explanation: Capture by reference doesn't extend lifetimes. For deferred execution, capture by value or own the data.
+
+  - id: cpp-lambda-002
+    topic: cpp/core
+    difficulty: medium
+    format: predict_output
+    language: cpp
+    question: What does this program print?
+    code: |
+      #include <iostream>
+      int main() {
+          int x = 1;
+          auto byVal = [x] { return x; };
+          auto byRef = [&x] { return x; };
+          x = 5;
+          std::cout << byVal() << byRef() << "\n";
+      }
+    answer: "15"
+    explanation: By-value capture copies x when the lambda is created; by-reference sees the later value.
+
+  - id: cpp-order-001
+    topic: cpp/core
+    difficulty: hard
+    format: multiple_choice
+    question: In what order are non-static data members initialised?
+    choices:
+      a: In the order they appear in the constructor's member initializer list
+      b: In the order they are declared in the class
+      c: Alphabetically
+      d: Unspecified
+    answer: b
+    explanation: Declaration order wins regardless of the initializer list order. -Wreorder warns when they differ.
+
+  - id: cpp-span-001
+    topic: cpp/core/containers
+    difficulty: medium
+    format: multiple_choice
+    question: What is std::span<T> (C++20)?
+    choices:
+      a: An owning dynamic array
+      b: A non-owning view over a contiguous sequence of T (pointer + size)
+      c: A linked list
+      d: A thread-safe queue
+    answer: b
+    explanation: span is to contiguous arrays what string_view is to strings. It does not own or extend lifetimes.
+
+  - id: cpp-opt-001
+    topic: cpp/core
+    difficulty: easy
+    format: multiple_choice
+    question: What is std::optional<T> for?
+    choices:
+      a: Representing a value that may or may not be present without heap allocation
+      b: Making function arguments optional at compile time
+      c: Lazy evaluation of expressions
+      d: Storing one of several types
+    answer: a
+    explanation: optional holds a T inline or nothing. std::variant is the "one of several types" vocabulary type.
+
+  - id: cpp-order-002
+    topic: cpp/core
+    difficulty: easy
+    format: ordering
+    question: Put the stages of building a C++ program in order.
+    items:
+      a: Linking object files into an executable
+      b: Preprocessing (#include, macros)
+      c: Compiling each translation unit to an object file
+    answer: [b, c, a]
+    explanation: Preprocessor, then the compiler per translation unit, then the linker resolves symbols across object files.

@@ -1,0 +1,4 @@
+name: javascript
+topic: javascript/core
+track: javascript
+description: JavaScript and TypeScript semantics, the event loop, promises and Node.js.

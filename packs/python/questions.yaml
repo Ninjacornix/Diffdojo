@@ -1,0 +1,453 @@
+questions:
+  - id: py-default-001
+    topic: python/core
+    difficulty: easy
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      def add(item, bucket=[]):
+          bucket.append(item)
+          return bucket
+
+      add(1)
+      print(add(2))
+    answer: "[1, 2]"
+    explanation: Default values are evaluated once at definition time, so the same list is shared between calls. Use `bucket=None`.
+
+  - id: py-is-001
+    topic: python/core
+    difficulty: easy
+    format: multiple_choice
+    question: What is the difference between `==` and `is`?
+    choices:
+      a: They are the same
+      b: "`==` compares values via __eq__; `is` checks whether both names refer to the same object"
+      c: "`is` is a faster version of `==` with the same meaning"
+      d: "`is` compares types"
+    answer: b
+    explanation: Use `is` for singletons such as None; use == for value comparisons.
+
+  - id: py-closure-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      fs = [lambda: i for i in range(3)]
+      print([f() for f in fs])
+    answer: "[2, 2, 2]"
+    explanation: Closures capture variables, not values (late binding). Use `lambda i=i: i` to bind the current value.
+
+  - id: py-gil-001
+    topic: python/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: In CPython with the GIL, which workload benefits most from threading?
+    choices:
+      a: CPU-bound pure-Python number crunching
+      b: I/O-bound work such as network requests, because the GIL is released while waiting
+      c: Neither; threads never run concurrently
+      d: Both equally
+    answer: b
+    explanation: Only one thread executes Python bytecode at a time; use multiprocessing (or free-threaded builds) for CPU-bound parallelism.
+
+  - id: py-gil-002
+    topic: python/concurrency
+    difficulty: hard
+    format: true_false
+    question: Because of the GIL, `counter += 1` on a shared global is atomic and needs no lock.
+    answer: false
+    explanation: It compiles to several bytecodes (load, add, store); a thread switch between them loses updates. Use a Lock.
+
+  - id: py-asyncio-001
+    topic: python/asyncio
+    difficulty: medium
+    format: multiple_choice
+    question: What happens if you call an async function without awaiting it, e.g. `fetch(url)`?
+    choices:
+      a: It runs synchronously
+      b: It returns a coroutine object that never runs (and Python warns "coroutine was never awaited")
+      c: It runs in a background thread
+      d: It raises immediately
+    answer: b
+    explanation: Calling an async def only creates the coroutine; await it or schedule it with asyncio.create_task.
+
+  - id: py-asyncio-002
+    topic: python/asyncio
+    difficulty: medium
+    format: multiple_choice
+    question: Inside an asyncio coroutine you call `time.sleep(2)`. What is the effect?
+    choices:
+      a: Only this coroutine pauses
+      b: The whole event loop blocks for 2 seconds, stalling every other task
+      c: It raises an error
+      d: It is converted to asyncio.sleep automatically
+    answer: b
+    explanation: Blocking calls freeze the single-threaded loop. Use await asyncio.sleep() or run blocking work in an executor.
+
+  - id: py-asyncio-003
+    topic: python/asyncio
+    difficulty: hard
+    format: multiple_choice
+    question: Why should you keep a reference to the task returned by asyncio.create_task()?
+    choices:
+      a: Tasks are cancelled when the reference count drops
+      b: The event loop keeps only weak references to tasks, so an unreferenced task can be garbage-collected before it finishes
+      c: To make it run faster
+      d: It is required to get exceptions printed
+    answer: b
+    explanation: The asyncio docs recommend saving tasks (e.g. in a set) to avoid them disappearing mid-execution.
+
+  - id: py-asyncio-004
+    topic: python/asyncio
+    difficulty: medium
+    format: multiple_choice
+    question: What does asyncio.gather(a(), b()) do?
+    choices:
+      a: Runs a() then b() sequentially
+      b: Runs both concurrently and returns their results in argument order
+      c: Returns whichever finishes first
+      d: Runs them in separate processes
+    answer: b
+    explanation: Results keep the argument order regardless of completion order.
+
+  - id: py-dict-001
+    topic: python/core
+    difficulty: easy
+    format: true_false
+    question: Since Python 3.7, dict preserves insertion order as a language guarantee.
+    answer: true
+    explanation: It was a CPython implementation detail in 3.6 and became part of the language spec in 3.7.
+
+  - id: py-dict-002
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: What happens if you add keys to a dict while iterating over it?
+    choices:
+      a: New keys are included in the iteration
+      b: RuntimeError (dictionary changed size during iteration)
+      c: Silent undefined behaviour
+      d: The loop restarts
+    answer: b
+    explanation: Iterate over list(d) or collect changes and apply them after the loop.
+
+  - id: py-dict-003
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why can a list not be used as a dict key, but a tuple of ints can?
+    choices:
+      a: Lists are too large
+      b: Keys must be hashable; mutable lists don't define __hash__ because their hash would change
+      c: Tuples are faster
+      d: Lists can be keys in Python 3.12
+    answer: b
+    explanation: A tuple is hashable only if all its elements are hashable.
+
+  - id: py-copy-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      grid = [[0] * 2] * 2
+      grid[0][0] = 1
+      print(grid)
+    answer: "[[1, 0], [1, 0]]"
+    explanation: "`* 2` repeats a reference to the same inner list. Use `[[0] * 2 for _ in range(2)]`."
+
+  - id: py-copy-002
+    topic: python/core
+    difficulty: easy
+    format: multiple_choice
+    question: What does copy.copy() do for a list of lists, compared with copy.deepcopy()?
+    choices:
+      a: Both copy the inner lists
+      b: copy.copy creates a new outer list that shares the inner lists; deepcopy copies recursively
+      c: copy.copy copies recursively; deepcopy only the outer list
+      d: Neither creates a new list
+    answer: b
+    explanation: Shallow copies share nested objects.
+
+  - id: py-gen-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      g = (x * x for x in range(4))
+      print(sum(g), sum(g))
+    answer: 14 0
+    explanation: A generator can be consumed only once; the second sum sees an exhausted iterator.
+
+  - id: py-gen-002
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: What is the main advantage of a generator expression over a list comprehension for large inputs?
+    choices:
+      a: It is always faster
+      b: It produces items lazily, using constant memory
+      c: It can be indexed
+      d: It sorts its output
+    answer: b
+    explanation: Generators yield one item at a time; lists materialise everything.
+
+  - id: py-scope-001
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: "`x = 1` at module level; inside a function `print(x); x = 2` raises an error. Which one and why?"
+    choices:
+      a: NameError, because x is not defined
+      b: UnboundLocalError, because the assignment makes x local to the whole function
+      c: SyntaxError
+      d: No error; it prints 1
+    answer: b
+    explanation: Python decides scope at compile time. Use `global x` (or better, avoid rebinding globals).
+
+  - id: py-exc-001
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why is a bare `except:` considered harmful?
+    choices:
+      a: It is slower
+      b: It also catches KeyboardInterrupt and SystemExit and hides real bugs
+      c: It doesn't catch any exception
+      d: It is a syntax error in Python 3
+    answer: b
+    explanation: Catch the specific exceptions you expect, or at most `except Exception:`.
+
+  - id: py-exc-002
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      def f():
+          try:
+              return "try"
+          finally:
+              print("finally", end=" ")
+      print(f())
+    answer: finally try
+    explanation: The finally block runs before the function actually returns.
+
+  - id: py-with-001
+    topic: python/core
+    difficulty: easy
+    format: multiple_choice
+    question: What does a `with` statement guarantee?
+    choices:
+      a: The block runs in a separate thread
+      b: The context manager's __exit__ runs when the block exits, even if an exception is raised
+      c: The block is retried on error
+      d: Variables defined inside are deleted afterwards
+    answer: b
+    explanation: That is why `with open(...)` reliably closes files and `with lock:` reliably releases locks.
+
+  - id: py-slots-001
+    topic: python/core
+    difficulty: hard
+    format: multiple_choice
+    question: What does defining `__slots__` on a class do?
+    choices:
+      a: Makes instances immutable
+      b: Replaces the per-instance __dict__ with fixed attribute slots, saving memory and preventing new attributes
+      c: Makes methods faster by caching them
+      d: Enables multiple inheritance
+    answer: b
+    explanation: Useful for many small objects; it also prevents arbitrary attribute assignment.
+
+  - id: py-dataclass-001
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: "What does `@dataclass(frozen=True)` give you?"
+    choices:
+      a: Faster attribute access
+      b: Generated __init__/__repr__/__eq__, immutability, and a __hash__ so instances can be dict keys
+      c: Automatic JSON serialisation
+      d: Thread safety
+    answer: b
+    explanation: Assigning to a field of a frozen dataclass raises FrozenInstanceError.
+
+  - id: py-complexity-001
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: Which operation is O(n) on a Python list of length n?
+    choices:
+      a: lst.append(x)
+      b: lst[i]
+      c: lst.insert(0, x)
+      d: lst.pop()
+    answer: c
+    explanation: Inserting at the front shifts every element. Use collections.deque for O(1) appendleft/popleft.
+
+  - id: py-complexity-002
+    topic: python/core
+    difficulty: easy
+    format: short_answer
+    question: What is the average time complexity of `x in s` when s is a set? (big-O)
+    answer: O(1)
+    accept:
+      - constant
+      - o(1) average
+    explanation: Sets are hash tables; membership on a list is O(n).
+
+  - id: py-deque-001
+    topic: python/core
+    difficulty: easy
+    format: multiple_choice
+    question: Why use collections.deque instead of a list for a FIFO queue?
+    choices:
+      a: deque supports O(1) appends and pops at both ends; list.pop(0) is O(n)
+      b: deque is sorted
+      c: deque is thread-safe for all operations
+      d: deque uses less memory than any list
+    answer: a
+    explanation: deque is a doubly-linked list of blocks optimised for both ends. For thread-to-thread queues use queue.Queue.
+
+  - id: py-sort-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      people = [("bob", 25), ("amy", 30), ("cat", 25)]
+      people.sort(key=lambda p: p[1])
+      print([name for name, _ in people])
+    answer: "['bob', 'cat', 'amy']"
+    explanation: Python's sort is stable, so equal keys keep their original order (bob before cat).
+
+  - id: py-int-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      print(-7 // 2, -7 % 2, int(-7 / 2))
+    answer: -4 1 -3
+    explanation: Floor division rounds toward negative infinity (unlike C), while int() truncates toward zero.
+
+  - id: py-float-001
+    topic: python/core
+    difficulty: easy
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      import math
+      print(0.1 + 0.2 == 0.3, math.isclose(0.1 + 0.2, 0.3))
+    answer: False True
+    explanation: Binary floating point can't represent 0.1 exactly. Compare with a tolerance.
+
+  - id: py-mro-001
+    topic: python/core
+    difficulty: hard
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      class A:
+          def who(self): return "A"
+      class B(A):
+          def who(self): return "B" + super().who()
+      class C(A):
+          def who(self): return "C" + super().who()
+      class D(B, C):
+          def who(self): return "D" + super().who()
+      print(D().who())
+    answer: DBCA
+    explanation: super() follows the MRO D, B, C, A (C3 linearisation), not just the direct parent.
+
+  - id: py-thread-001
+    topic: python/concurrency
+    difficulty: medium
+    format: multiple_choice
+    question: Which is the idiomatic way to pass work between threads in Python?
+    choices:
+      a: A global list with no locking
+      b: queue.Queue, which handles locking and blocking get/put
+      c: asyncio.Queue
+      d: A dict guarded by the GIL
+    answer: b
+    explanation: asyncio.Queue is for coroutines on one event loop and is not thread-safe.
+
+  - id: py-mp-001
+    topic: python/concurrency
+    difficulty: medium
+    format: true_false
+    question: On platforms that use the "spawn" start method (Windows, macOS default), multiprocessing code must be guarded by `if __name__ == "__main__":`.
+    answer: true
+    explanation: Each child re-imports the main module; without the guard it would recursively start processes.
+
+  - id: py-typing-001
+    topic: python/core
+    difficulty: easy
+    format: true_false
+    question: Type hints are enforced by the Python interpreter at runtime.
+    answer: false
+    explanation: They are metadata for tools like mypy and pyright (and libraries that choose to read them).
+
+  - id: py-walrus-001
+    topic: python/core
+    difficulty: easy
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      data = [3, 8, 1]
+      if (n := len(data)) > 2:
+          print(f"{n} items")
+    answer: 3 items
+    explanation: The assignment expression binds n and yields its value in one step.
+
+  - id: py-strings-001
+    topic: python/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why is building a large string with `s += piece` in a loop discouraged?
+    choices:
+      a: Strings are immutable, so each += can copy the whole string, making the loop O(n²) in the worst case
+      b: It is a syntax error
+      c: It changes the encoding
+      d: It is not thread-safe
+    answer: a
+    explanation: Collect pieces in a list and use ''.join(pieces). (CPython sometimes optimises +=, but don't rely on it.)
+
+  - id: py-iter-001
+    topic: python/core
+    difficulty: medium
+    format: predict_output
+    language: python
+    question: What does this program print?
+    code: |
+      a = [1, 2, 3]
+      b = ["x", "y"]
+      print(list(zip(a, b)))
+    answer: "[(1, 'x'), (2, 'y')]"
+    explanation: zip stops at the shortest input. Use itertools.zip_longest to keep going.
+
+  - id: py-order-001
+    topic: python/core
+    difficulty: medium
+    format: ordering
+    question: In which order does Python look up a bare name inside a nested function (LEGB)?
+    items:
+      a: Built-in
+      b: Enclosing function scopes
+      c: Local
+      d: Global (module)
+    answer: [c, b, d, a]
+    explanation: Local, Enclosing, Global, Built-in.

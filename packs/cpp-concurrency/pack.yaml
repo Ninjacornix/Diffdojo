@@ -1,0 +1,4 @@
+name: cpp-concurrency
+topic: cpp/concurrency
+track: concurrency
+description: Threads, mutexes, condition variables, atomics and the C++ memory model.
