@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
     "pack-ci": "node scripts/pack-ci.js",
-    "lint": "node scripts/check-syntax.js"
+    "lint": "node scripts/check-syntax.js",
+    "screenshot": "node --no-warnings scripts/screenshot.mjs"
   },
   "optionalDependencies": {},
   "keywords": [

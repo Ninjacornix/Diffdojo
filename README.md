@@ -2,6 +2,8 @@
 
 **Learn from the code Claude writes for you — while it writes it.**
 
+<p align="center"><img src="docs/evil-claude-battle.svg" alt="DiffDojo Battle: fighting Evil Claude in the terminal by answering a question about the code Claude just wrote" width="677"></p>
+
 When Claude Code is busy working on your project, you're usually just waiting. DiffDojo turns that waiting time into practice: after each change Claude makes, it asks you a few short questions about *that exact change*. Answering them means you actually review and understand the code instead of skimming it.
 
 > DiffDojo is an independent, open-source plugin for Claude Code. It is not affiliated with or endorsed by Anthropic.
@@ -28,38 +30,7 @@ Every answer is checked against real evidence — running the code, reading it, 
 
 ## Battle mode
 
-While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors:
-
-```
- TYPO SPRITE                                    \   ~   /
-      :L3                                     .-'"""""""'-.
-   HP:▐████████████████▌                     /   o     o   \
- │ ●●●                                      |       ^       |
- └──────────────────────────▶               |   \__/ \__/   |
-                                             \   t  y  p   /
-                                              '-.._____..-'
-                                                /   |   \
-                                               ~    ~    ~
-           _______
-         .'       '.
-        /   _____   \
-       |   /     \   |
-      [|  |       |  |]
-       |   \_____/   |
-        '.         .'              YOU
-      ___|'-.___.-'|___              ●●●  lives
-     /    \   |   /    \           HP:▐████████████████▌
-    /      |  |  |      \                100/ 100
-   |   |   |  |  |   |   |         ◀──────────────────────────┘
-══════════════════════════════════════════════════════════════════
-  TYPO SPRITE asks: `for (auto x : items) x.count++;` — what
-  happens to items?
-▶ a) Compilation error
-  b) Nothing; x is a copy of each element
-  c) Each element's count is incremented
-  d) Only the first element changes
-══════════════════════════════════════════════════════════════════
-```
+While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors. The screenshot at the top is a real frame: Evil Claude, the final boss of Professional mode, asks about a line in the change Claude just made.
 
 - **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses).
 - Beat an enemy and your HP is fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
