@@ -113,18 +113,19 @@ test('seeded-bug questions become four line choices', () => {
   assert.match(four.choices[four.correctKey], /line 4: total -= x/);
 });
 
-test('every enemy has pixel art in the scene renderer', async () => {
+test('every enemy has ASCII art in the scene renderer', async () => {
   const scene = await import(require('url').pathToFileURL(require('path').join(__dirname, '..', 'hooks', 'scene.mts')).href)
   for (const ladder of Object.values(battle.LADDERS)) {
     for (const e of ladder) {
       for (const f of [0, 1]) {
-        const px = scene.pixels(e.id, f)
-        assert.ok(px.length >= 10, e.id)
-        assert.ok(px.some((r) => r.includes('#')), e.id)
+        const rows = scene.art(e.id, f)
+        assert.ok(rows.length >= 7 && rows.length <= 12, `${e.id}: ${rows.length} rows`)
+        assert.ok(rows.some((r) => /[|/_]/.test(r)), e.id)
+        assert.ok(rows.every((r) => !r.includes('@')), `${e.id}: eye markers are drawn`)
       }
     }
   }
-  assert.notDeepStrictEqual(scene.pixels('evil', 0), scene.pixels('evil', 1), 'Evil Claude turns while idle')
+  assert.notDeepStrictEqual(scene.art('evil', 0), scene.art('evil', 1), 'Evil Claude turns while idle')
 })
 
 test('the terminal game plays a full exchange: intro, question, hit, next enemy', async () => {

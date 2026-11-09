@@ -13,310 +13,189 @@ export type Line = Seg[]
 export const PALETTE = {
   bg: '#e3e6c8', // pale screen
   ink: '#1f2414', // darkest
-  mid: '#8a9070', // shading
+  mid: '#6b7155', // secondary text
   light: '#a7ad8a',
   hurt: '#b8452f',
   boss: '#d97757', // Evil Claude's orange
 }
 
 // ---------------------------------------------------------------- sprites
-// Pixel grids: '#' ink, '+' shade, 'o' eye (ink, closes on blink), ' ' empty.
-// Two pixel rows become one text row of half blocks.
+// ASCII line art. '@' marks an eye: drawn 'o', blinking to '-' on the second
+// idle frame, which also bobs the sprite down one row.
+
+const R = String.raw
 
 const ART: Record<string, string[]> = {
   player: [
-    '         ######         ',
-    '       ##++++++##       ',
-    '      #++++++++++#      ',
-    '     #++++++++++++#     ',
-    '     ##############     ',
-    '    ###++++++++++###    ',
-    '   #+##++++++++++##+#   ',
-    '   #+##++++++++++##+#   ',
-    '    ###++++++++++###    ',
-    '      #++++++++++#      ',
-    '    ######++++######    ',
-    '  ##++++++####++++++##  ',
-    ' #++++++++#  #++++++++# ',
-    '#+++++++++#  #+++++++++#',
-    '#++++++++++##++++++++++#',
-    '#++++++++++++++++++++++#',
-    '#+++###+++++++++++###++#',
-    ' ###   ###########   ## ',
+    R`         _______         `,
+    R`       .'       '.       `,
+    R`      /   _____   \      `,
+    R`     |   /     \   |     `,
+    R`    [|  |       |  |]    `,
+    R`     |   \_____/   |     `,
+    R`      '.         .'      `,
+    R`    ___|'-.___.-'|___    `,
+    R`   /    \   |   /    \   `,
+    R`  /      |  |  |      \  `,
+    R` |   |   |  |  |   |   | `,
   ],
   typo: [
-    '      #     #     ',
-    '       #   #      ',
-    '     #########    ',
-    '   ##+++++++++##  ',
-    '  #+++++++++++++# ',
-    '  #++oo+++++oo++# ',
-    ' #+++oo+++++oo+++#',
-    ' #+++++++++++++++#',
-    ' #++++#+#+#+#++++#',
-    '  #++++#+#+#++++# ',
-    '  ##+++++++++++## ',
-    '    ##+++++++##   ',
-    '   #  #######  #  ',
-    '  #             # ',
+    R`       \   ~   /       `,
+    R`     .-'"""""""'-.     `,
+    R`    /   @     @   \    `,
+    R`   |       ^       |   `,
+    R`   |   \__/ \__/   |   `,
+    R`    \   t  y  p   /    `,
+    R`     '-.._____..-'     `,
+    R`       /   |   \       `,
+    R`      ~    ~    ~      `,
   ],
   gremlin: [
-    ' #               # ',
-    ' ##             ## ',
-    ' #+#  #######  #+# ',
-    '  #+##+++++++##+#  ',
-    '   #+++++++++++#   ',
-    '  #+++#+++++#+++#  ',
-    '  #++#oo+++oo#++#  ',
-    '  #+++++++++++++#  ',
-    '   #++#######++#   ',
-    '   #+#+#+#+#+#+#   ',
-    '    ###########    ',
-    '   #+++++++++++#   ',
-    '  #+#+++++++++#+#  ',
-    '  ## #+++++++# ##  ',
-    '     ##     ##     ',
+    R`   /\             /\   `,
+    R`  /  \___________/  \  `,
+    R`  \   _         _   /  `,
+    R`   | (@)       (@) |   `,
+    R`   |      /_\      |   `,
+    R`   |   \/\/\/\/\   |   `,
+    R`    \_____________/    `,
+    R`   _/ |  L I N T  | \_ `,
+    R`  /__ |___________| __\ `,
   ],
   imp: [
-    '    #         #    ',
-    '   #+#       #+#   ',
-    '   #++#######++#   ',
-    '    #+++++++++#    ',
-    '   #+++++++++++#   ',
-    '   #+oo+++++oo+#   ',
-    '   #+oo+++++oo+#   ',
-    '   #+++++#+++++#   ',
-    '    #++#####++#  # ',
-    '     #+++++++#  #+#',
-    '   ###########  #+#',
-    '  #+++++#+++++#####',
-    '  #++++# #++++#    ',
-    '  #+++#   #+++#    ',
-    '  ####     ####    ',
+    R`     ^         ^              `,
+    R`    / \_______/ \     _____   `,
+    R`   |   @     @   |   | +1  |  `,
+    R`   |     ___     |   |_____|  `,
+    R`    \   \___/   /       ||    `,
+    R`  ---\_________/--------'|    `,
+    R`     /   | |   \         |    `,
+    R`    /____| |____\             `,
   ],
   null: [
-    '      #######      ',
-    '    ##+++++++##    ',
-    '   #+++++++++++#   ',
-    '  #++#+#+++#+#++#  ',
-    '  #+++#+++++#+++#  ',
-    '  #++#+#+++#+#++#  ',
-    '  #+++++++++++++#  ',
-    '  #+++#######+++#  ',
-    '   #+#+++++++#+#   ',
-    '   #+++++++++++#   ',
-    '    #+#+#+#+#+#    ',
-    '    # # # # # #    ',
-    '                   ',
-    '     # #   # #     ',
+    R`        _.-----._        `,
+    R`      .'  _   _  '.      `,
+    R`     /   (@) (@)   \     `,
+    R`    |      ___      |    `,
+    R`    |    [ NULL ]   |    `,
+    R`     \   '-...-'   /     `,
+    R`      '._       _.'      `,
+    R`         '-----'         `,
+    R`          | | |          `,
   ],
   leak: [
-    '       #####       ',
-    '     ##+++++##     ',
-    '    #+++++++++#    ',
-    '   #++oo+++oo++#   ',
-    '   #++oo+++oo++#   ',
-    '   #+++++++++++#   ',
-    '   #++++###++++#   ',
-    '  #+++++#+#+++++#  ',
-    '  #+++++++++++++#  ',
-    ' #+++++++++++++++# ',
-    ' #+#+++#+++#+++#+# ',
-    '  # #+# #+# #+# #  ',
-    '     #   #   #     ',
-    '    +     +     +  ',
-    '  +    +     +     ',
+    R`         _______         `,
+    R`       .'       '.       `,
+    R`      /  @     @  \      `,
+    R`     |     ___     |     `,
+    R`     |    (___)    |     `,
+    R`     |  ~~~~~~~~~  |     `,
+    R`      \_ _ _ _ _ _/      `,
+    R`       ' ' ' ' ' '       `,
+    R`       .  .  .  .        `,
   ],
   flaky: [
-    '  ###############  ',
-    '  #+++++++++++++#  ',
-    '  #+#+#+++++#+#+#  ',
-    '  #++#+++++++#++#  ',
-    '  #+#+#+++++#+#+#  ',
-    '  #+++++++++++++#  ',
-    '  #+++oo+++oo+++#  ',
-    '  #+++oo+++oo+++#  ',
-    '  #+++++#+#+++++#  ',
-    '  #++++#+#+#++++#  ',
-    '  ###############  ',
-    '    #+#     #+#    ',
-    '    #+#     #+#    ',
-    '   ###       ###   ',
+    R`     _______________     `,
+    R`    | [v]  [x]  [?] |    `,
+    R`    |---------------|    `,
+    R`    |   @       @   |    `,
+    R`    |       ~       |    `,
+    R`    |   \_______/   |    `,
+    R`    |_______________|    `,
+    R`      /|         |\      `,
+    R`     /_|         |_\     `,
   ],
   race: [
-    '  ####       ####  ',
-    ' #++++#     #++++# ',
-    ' #+oo+#     #+oo+# ',
-    ' #++++##   ##++++# ',
-    '  ####+##  #+####  ',
-    '      #+# #+#      ',
-    '       #+#+#       ',
-    '        #+#        ',
-    '       #+#+#       ',
-    '      #+# #+#      ',
-    '  ####+#   #+####  ',
-    ' #++++#     #++++# ',
-    ' #+oo+#     #+oo+# ',
-    '  ####       ####  ',
+    R`    __          __      `,
+    R`   / @\  >>>>  /@ \     `,
+    R`  |    | >>>> |    |    `,
+    R`   \__/  >>>>  \__/     `,
+    R`     \\        //       `,
+    R`      \\      //        `,
+    R`       \\    //         `,
+    R`        \\  //          `,
+    R`         \\//           `,
   ],
   deadlock: [
-    ' ######     ###### ',
-    ' #++++#######++++# ',
-    ' #+oo+#+++++#+oo+# ',
-    ' #++++#######++++# ',
-    ' ######     ###### ',
-    '   #+#       #+#   ',
-    '   #+#  ###  #+#   ',
-    '   #+# #+++# #+#   ',
-    '   #+###+#+###+#   ',
-    '   #+++++#+++++#   ',
-    ' ######     ###### ',
-    ' #++++#######++++# ',
-    ' #+oo+#+++++#+oo+# ',
-    ' ######     ###### ',
+    R`    .--.          .--.    `,
+    R`   |    |        |    |   `,
+    R`  _|____|_      _|____|_  `,
+    R` |  @  @  |====|  @  @  | `,
+    R` |   __   |====|   __   | `,
+    R` |  (__)  |    |  (__)  | `,
+    R` '--------'    '--------' `,
   ],
   heisen: [
-    '     ++  #  ++     ',
-    '   +   #####   +   ',
-    '     ##+++++##     ',
-    '    #+++++++++#  + ',
-    ' + #++oo+++oo++#   ',
-    '   #++oo+++oo++#   ',
-    '   #+++++#+++++#   ',
-    '    #+++#+#+++#  + ',
-    '  + #+++++++++#    ',
-    '     #+++++++#     ',
-    '    + #+++++# +    ',
-    '       #+++#       ',
-    '   +    #+#    +   ',
-    '         #         ',
+    R`   ?     \   /     ?    `,
+    R`          \ /           `,
+    R`     .--.-(_)-.--.      `,
+    R`    / @ |     | @ \     `,
+    R` ? |    |     |    | ?  `,
+    R`   /\   '-----'   /\    `,
+    R`  /  \  /     \  /  \   `,
+    R`       /       \        `,
+    R`   ?                 ?  `,
   ],
   segfault: [
-    '      #######      ',
-    '    ##+++++++##    ',
-    '   #+++++++++++#   ',
-    '  #++#+#+++#+#++#  ',
-    '  #+++#+++++#+++#  ',
-    '  #++#+#+++#+#++#  ',
-    '  #+++++++++++++#  ',
-    '   #++#+#+#+#++#   ',
-    '    #+#+#+#+#+#    ',
-    '     #########     ',
-    '    #+++++++++#    ',
-    '   #+# #+++# #+#   ',
-    '  #+#  #+#+#  #+#  ',
-    '  ##   ## ##   ##  ',
+    R`        .-""""""-.       `,
+    R`       /  @    @  \      `,
+    R`      |     __     |     `,
+    R`      |   0xDEAD   |     `,
+    R`      |            |     `,
+    R`      |  ,      ,  |     `,
+    R`       \/ \/\/\/ \/      `,
   ],
   monolith: [
-    '  ###############  ',
-    '  #+++++++++++++#  ',
-    '  #+###########+#  ',
-    '  #+#+++++++++#+#  ',
-    '  #+#+oo+++oo+#+#  ',
-    '  #+#+++++++++#+#  ',
-    '  #+#++#####++#+#  ',
-    '  #+###########+#  ',
-    '  #+#+#+#+#+#+#+#  ',
-    '  #+++++++++++++#  ',
-    '  #+#+#+#+#+#+#+#  ',
-    '  #+++++++++++++#  ',
-    ' #################  ',
-    ' #+++++++++++++++#  ',
-    ' #################  ',
+    R`   _________________   `,
+    R`  |  _____________  |  `,
+    R`  | |   @     @   | |  `,
+    R`  | |     ___     | |  `,
+    R`  | |_____________| |  `,
+    R`  | [==] [==] [==]  |  `,
+    R`  | [==] [==] [==]  |  `,
+    R`  | [==] [==] [==]  |  `,
+    R`  |_________________|  `,
   ],
 }
 
-/** Evil Claude: a starburst whose rays turn as it idles, with an angry face. */
-function evilClaude(frame: number): string[] {
-  const W = 26
-  const H = 24
-  const cx = (W - 1) / 2
-  const cy = (H - 1) / 2
-  const rays = 10
-  const turn = (frame % 2) * (Math.PI / rays)
-  const rows: string[] = []
-  for (let y = 0; y < H; y++) {
-    let row = ''
-    for (let x = 0; x < W; x++) {
-      const dx = x - cx
-      const dy = (y - cy) * 1.0
-      const r = Math.sqrt(dx * dx + dy * dy)
-      const a = Math.atan2(dy, dx) + turn
-      const k = (a / ((2 * Math.PI) / rays)) % 1
-      const off = Math.min(Math.abs(k), 1 - Math.abs(k)) // 0 on a ray
-      const onRay = r > 4 && r < 12.2 && off < 0.16 - r * 0.006
-      const core = r <= 5.2
-      row += core ? '#' : onRay ? '#' : ' '
-    }
-    rows.push(row)
-  }
-  // Angry face carved into the core: slanted brows, eyes, frown.
-  const carve = (x: number, y: number, ch = ' ') => {
-    const r = rows[y]
-    if (r && x >= 0 && x < r.length) rows[y] = r.slice(0, x) + ch + r.slice(x + 1)
-  }
-  const c = Math.round(cx)
-  const m = Math.round(cy)
-  carve(c - 3, m - 3)
-  carve(c - 2, m - 2)
-  carve(c + 2, m - 3)
-  carve(c + 1, m - 2)
-  carve(c - 2, m - 1, 'o')
-  carve(c + 1, m - 1, 'o')
-  carve(c - 2, m + 2)
-  carve(c - 1, m + 1)
-  carve(c, m + 1)
-  carve(c + 1, m + 2)
-  return rows.map(r => r.replace(/o/g, ' '))
-}
+// Evil Claude: an angry starburst; its rays swing between two angles.
+const EVIL: string[][] = [
+  [
+    R`              |              `,
+    R`       \      |      /       `,
+    R`         \    |    /         `,
+    R`           \  |  /           `,
+    R`  -------- ( >_< ) --------  `,
+    R`           /  |  \           `,
+    R`         /    |    \         `,
+    R`       /      |      \       `,
+    R`              |              `,
+  ],
+  [
+    R`        \           /        `,
+    R`    .    \         /    .    `,
+    R`      '.  \       /  .'      `,
+    R`   ---  '. \     / .'  ---   `,
+    R`  ======== ( >o< ) ========  `,
+    R`   ---  .' /     \ '.  ---   `,
+    R`      .'  /       \  '.      `,
+    R`    '    /         \    '    `,
+    R`        /           \        `,
+  ],
+]
 
-/** The pixel rows of a character's idle frame (0 or 1). */
-export function pixels(id: string, frame: number): string[] {
-  if (id === 'evil') return evilClaude(frame)
-  const art = ART[id] || ART.typo
-  const w = Math.max(...art.map(r => r.length))
-  const grid = art.map(r => r.padEnd(w))
-  if (frame % 2 === 0) return grid
-  // Idle frame 2: bob down one pixel and blink.
-  return [' '.repeat(w)].concat(grid.slice(0, -1)).map(r => r.replace(/o/g, '+'))
-}
-
-/**
- * Half-block cells for a pixel grid: each text cell holds two pixels, the top
- * one drawn as the glyph's color and the bottom one as the cell's background,
- * so shading, eyes and mouths survive at full vertical resolution.
- */
-function cells(px: string[], color: { ink: string; mid: string }): Line[] {
-  const out: Line[] = []
-  const w = Math.max(...px.map(r => r.length))
-  const tone = (ch: string | undefined) => (ch === '#' || ch === 'o' ? color.ink : ch === '+' ? color.mid : null)
-  for (let y = 0; y < px.length; y += 2) {
-    const top = px[y].padEnd(w)
-    const bot = (px[y + 1] || '').padEnd(w)
-    const line: Line = []
-    for (let x = 0; x < w; x++) {
-      const t = tone(top[x])
-      const b = tone(bot[x])
-      let cell: Seg
-      if (!t && !b) cell = { t: ' ', c: PALETTE.ink, bg: PALETTE.bg }
-      else if (t && b && t === b) cell = { t: '█', c: t, bg: PALETTE.bg }
-      else if (t && b) cell = { t: '▀', c: t, bg: b }
-      else if (t) cell = { t: '▀', c: t, bg: PALETTE.bg }
-      else cell = { t: '▄', c: b!, bg: PALETTE.bg }
-      const last = line[line.length - 1]
-      if (last && last.c === cell.c && last.bg === cell.bg) last.t += cell.t
-      else line.push(cell)
-    }
-    out.push(line)
-  }
-  return out
+/** The text rows of a character's idle frame (0 or 1). */
+export function art(id: string, frame: number): string[] {
+  if (id === 'evil') return EVIL[frame % 2]
+  const src = ART[id] || ART.typo
+  const w = Math.max(...src.map(r => r.length))
+  const rows = src.map(r => r.padEnd(w))
+  if (frame % 2 === 0) return rows.map(r => r.replace(/@/g, 'o')).concat([' '.repeat(w)])
+  return [' '.repeat(w)].concat(rows.map(r => r.replace(/@/g, '-')))
 }
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
-  const boss = id === 'evil'
-  const ink = hurt ? PALETTE.hurt : boss ? PALETTE.boss : PALETTE.ink
-  const mid = hurt ? PALETTE.hurt : boss ? PALETTE.boss : PALETTE.mid
-  return cells(pixels(id, frame), { ink, mid })
+  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : PALETTE.ink
+  return art(id, frame).map(t => [{ t, c, bg: PALETTE.bg, b: true }])
 }
 
 // ---------------------------------------------------------------- layout helpers

@@ -28,25 +28,29 @@ Every answer is checked against real evidence — running the code, reading it, 
 
 ## Battle mode
 
-While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles (with original characters). The real thing is in color on a pale green-gray screen:
+While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters. In color, the screen is pale green-gray with dark ink:
 
 ```
- TYPO SPRITE                                        ▀▄   ▄▀
-      :L3                                        ▄▄▀▀▀▀▀▀▀▀▀▄▄
-   HP:▐████████████████▌                        ███▀▀█████▀▀███
- │ ●●●                                         ████▀▀█████▀▀████
- └──────────────────────────▶                  ▀▀███▀▀▀▀▀▀▀███▀▀
-                                                ▀▀▀▀███████▀▀▀▀
-                                                ▄▀  ▀▀▀▀▀▀▀  ▀▄
-           ▄▄▄▄▄▄
-        ▄▀▀██████▀▀▄
-       █▀▀▀▀▀▀▀▀▀▀▀▀█
-     ▄▀██████████████▀▄
-     ▀▀██████████████▀▀            YOU
-      ▄▄█▀▀▀████▀▀▀█▄▄               ●●●  lives
-   ▄▀▀███████▀▀███████▀▀▄          HP:▐████████████████▌
-  ██████████▀▄▄▀██████████               100/ 100
-  ████▀▀▀███████████▀▀▀███         ◀──────────────────────────┘
+ TYPO SPRITE                                    \   ~   /
+      :L3                                     .-'"""""""'-.
+   HP:▐████████████████▌                     /   o     o   \
+ │ ●●●                                      |       ^       |
+ └──────────────────────────▶               |   \__/ \__/   |
+                                             \   t  y  p   /
+                                              '-.._____..-'
+                                                /   |   \
+                                               ~    ~    ~
+           _______
+         .'       '.
+        /   _____   \
+       |   /     \   |
+      [|  |       |  |]
+       |   \_____/   |
+        '.         .'              YOU
+      ___|'-.___.-'|___              ●●●  lives
+     /    \   |   /    \           HP:▐████████████████▌
+    /      |  |  |      \                100/ 100
+   |   |   |  |  |   |   |         ◀──────────────────────────┘
 ══════════════════════════════════════════════════════════════════
   TYPO SPRITE asks: `for (auto x : items) x.count++;` — what
   happens to items?
@@ -90,20 +94,27 @@ Show it off with `diffdojo badge`, which makes a little SVG badge for your GitHu
 **You need:** [Node.js](https://nodejs.org) 22.5 or newer and git. That's it — no `npm install` required.
 *(Optional: Python and a C++ compiler unlock more question types.)*
 
-**1. Get the plugin**
+**1. Install the plugin**
+
+In Claude Code, type:
+
+```
+/plugin install diffdojo --marketplace Ninjacornix/Diffdojo
+```
+
+Answer `y` to add the marketplace and pick a scope (user is the usual choice). From a shell, the same thing is `claude plugin install diffdojo --marketplace Ninjacornix/Diffdojo`. In the desktop app: click + next to the prompt box, then Plugins, Add marketplace with `Ninjacornix/Diffdojo`, then Add plugin.
+
+Updates arrive with `/plugin` (or `claude plugin update diffdojo`).
+
+**2. Or run it from a checkout** (for hacking on DiffDojo itself)
 
 ```bash
 git clone https://github.com/Ninjacornix/Diffdojo.git
-cd Diffdojo
-npm link          # optional: puts the `diffdojo` command on your PATH
-```
-
-**2. Start Claude Code with the plugin**
-
-```bash
 cd your-project
 claude --plugin-dir /path/to/Diffdojo
 ```
+
+For the terminal commands (`diffdojo quiz`, `diffdojo battle`, `diffdojo demo`) run `npm link` in the checkout, or use `node /path/to/Diffdojo/bin/diffdojo <command>`. Inside Claude Code the plugin puts `diffdojo` on the Bash tool's PATH by itself.
 
 **3. That's it — it's already on**
 

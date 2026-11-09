@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Code challenges, concept quizzes and design questions about what Claude just wrote. Local only. Independent project, not affiliated with Anthropic.",
   "author": {
-    "name": "DiffDojo contributors"
+    "name": "Ninjacornix"
   },
   "license": "MIT",
   "keywords": [
@@ -13,5 +13,7 @@
     "quiz",
     "mutation-testing"
   ],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "homepage": "https://github.com/Ninjacornix/Diffdojo",
+  "repository": "https://github.com/Ninjacornix/Diffdojo"
 }
