@@ -11,8 +11,8 @@ const HELP = `DiffDojo — practice on the code Claude just wrote. Local only.
 Usage: diffdojo <command> [options]
 
 Setup
-  enable [--test-cmd "<cmd>"]     Enable DiffDojo for the current git repository (/diffdojo:start)
-  disable                         Disable it for this repository (/diffdojo:stop)
+  enable [--test-cmd "<cmd>"]     Turn DiffDojo on for this repository (/diffdojo:start); on by default everywhere
+  disable                         Turn it off for this repository only (/diffdojo:stop)
   status                          Show whether this repo is enabled, queue size, last run
   doctor                          Check toolchains, hook speed and configuration
   config [get [key] | set <key> <value>] [--global]
@@ -30,7 +30,7 @@ Practice
   topics [list | pin <topic> | unpin <topic>]
 
 Progress
-  stats [--json]                  Belts, XP, accuracy, streak, trophies, bugs caught (/diffdojo:stats)
+  stats [--repo] [--json]         Belts, XP, accuracy, streak, trophies, bugs caught, across all projects (/diffdojo:stats)
   badge [--out <dir>] [--style flat|square]
                                   Write an SVG + Markdown badge (self-reported)
   report-bug --title "<t>" --test <path> [--file <f> --lines a-b] [--cmd "<cmd>"] [--critique <qid>]
@@ -94,6 +94,7 @@ const commands = {
     const git = require('./git');
     const dir = util.ensureDir(util.repoDir(repoId));
     fs.writeFileSync(path.join(dir, 'enabled'), util.nowIso());
+    fs.rmSync(path.join(dir, 'disabled'), { force: true });
     // Base snapshot for the session that is already running (SessionStart already fired).
     const tree = git.baseTree(root);
     util.writeJson(path.join(dir, 'enable-base.json'), { tree, head: git.head(root), at: util.nowIso() });
@@ -105,18 +106,16 @@ const commands = {
     console.log(`  data: ${dir} (nothing is written into the repository)`);
     console.log(`  test command: ${cfg.testCommand || '(none — set one to unlock killing-test questions and bug reports: diffdojo config testCommand "<cmd>")'}`);
     console.log(`  model path: ${cfg.model.enabled ? 'ON (' + cfg.model.provider + ')' : 'off (offline questions only)'}`);
-    console.log('Questions are generated in the background after each Claude turn. Answer them in a second terminal: diffdojo quiz');
+    console.log('Questions appear above your prompt while Claude works (/dojo opens the full pane). Terminal alternative: diffdojo quiz');
   },
 
   disable() {
     const { root, repoId } = repoContext({ require: true });
-    try {
-      fs.unlinkSync(path.join(util.repoDir(repoId), 'enabled'));
-    } catch {
-      /* already off */
-    }
+    const dir = util.ensureDir(util.repoDir(repoId));
+    fs.rmSync(path.join(dir, 'enabled'), { force: true });
+    fs.writeFileSync(path.join(dir, 'disabled'), util.nowIso());
     registerRepo(db(), root, repoId, false);
-    console.log(`DiffDojo disabled for ${root}. Your progress is kept (diffdojo purge --repo to delete it).`);
+    console.log(`DiffDojo is off for ${root} (it stays on everywhere else). Your progress is kept; /diffdojo:start turns it back on.`);
   },
 
   status() {
@@ -127,7 +126,8 @@ const commands = {
     const queue = require('./queue');
     const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
     const cfg = config.load(repoId);
-    console.log(`${root}: ${enabled ? 'enabled' : 'not enabled (run /diffdojo:start or diffdojo enable)'}`);
+    const why = fs.existsSync(path.join(util.repoDir(repoId), 'disabled')) ? 'turned off here with /diffdojo:stop' : fs.existsSync(path.join(util.repoDir(repoId), 'enabled')) ? 'turned on with /diffdojo:start' : util.autoEnable() ? 'on automatically (autoEnable)' : 'autoEnable is off; run /diffdojo:start';
+    console.log(`${root}: ${enabled ? 'enabled' : 'disabled'} (${why})`);
     console.log(`queued questions: ${queue.queuedCount(d, repoId)}`);
     if (last) console.log(`last Claude turn processed ${last.at}: ${last.questions || 0} questions from ${last.files || 0} files${last.skipped ? ` (${last.skipped})` : ''}`);
     console.log(`test command: ${cfg.testCommand || '(none)'} · model path: ${cfg.model.enabled ? 'on' : 'off'} · quiet: ${cfg.quiet}`);
@@ -251,7 +251,8 @@ const commands = {
   stats({ flags }) {
     const { repoId } = repoContext();
     const st = require('./stats');
-    const s = st.compute(db(), { repoId: flags.all ? null : repoId });
+    // Progress is global across every project; --repo narrows it to this one.
+    const s = st.compute(db(), { repoId: flags.repo ? repoId : null });
     if (flags.json) return console.log(JSON.stringify(s, null, 2));
     console.log(st.format(s, { color: color(flags) }));
   },
@@ -345,7 +346,7 @@ const commands = {
     const stats = require('./stats');
     const status = () => {
       const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
-      return { enabled, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, { repoId }) };
+      return { enabled, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
     };
     if (sub === 'status') return out(status());
     if (sub === 'next') return out({ ...status(), question: enabled ? server.publicQuestion(queue.next(d, { repoId })) : null });

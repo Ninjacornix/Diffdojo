@@ -158,6 +158,16 @@ function wrap(db) {
   };
 }
 
+/** Record a repository (path + enabled flag) so progress is tracked across all projects. */
+function ensureRepo(db, root, id, enabled = true) {
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO repos(id, path, enabled, created_at, updated_at) VALUES (?,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET enabled = excluded.enabled, path = excluded.path, updated_at = excluded.updated_at`,
+    id, root, enabled ? 1 : 0, now, now,
+  );
+}
+
 /** Insert a question object; JSON-encodes structured fields. Returns id. */
 function insertQuestion(db, q) {
   const r = db.run(
@@ -180,4 +190,4 @@ function hydrate(row) {
   return { ...row, choices: parse(row.choices), answer: parse(row.answer), meta: parse(row.meta) || {} };
 }
 
-module.exports = { open, close, dbPath, insertQuestion, hydrate };
+module.exports = { open, close, dbPath, insertQuestion, hydrate, ensureRepo };

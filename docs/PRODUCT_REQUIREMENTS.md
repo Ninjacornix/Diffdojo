@@ -19,7 +19,7 @@ The same feature set serves both. Difficulty adapts to the person.
 
 | ID | Story | Acceptance criterion |
 |---|---|---|
-| U1 | Enable per repo | Off by default. `/diffdojo:start` enables only the current repository. `/diffdojo:stop` disables it. |
+| U1 | Starts on its own | Runs in every git repository once the plugin is enabled. `/diffdojo:stop` turns it off for one repository; `autoEnable false` restores per-repo opt-in. Progress is tracked across all projects. |
 | U2 | Never slow Claude | All hooks are `async` and finish in well under a second. A DiffDojo crash never affects the Claude Code session. |
 | U3 | Relevant questions | Every code and design question cites a file and line range from the current session's changes. Every questionnaire question shows which detected or pinned topic selected it. |
 | U4 | Answer on my schedule | Questions queue up. They can be answered, skipped or snoozed at any time, including after the session ends. |
@@ -55,11 +55,11 @@ Full details and grading in [QUESTIONS_AND_GRADING.md](QUESTIONS_AND_GRADING.md)
 
 ## UX requirements
 
-- Primary UI: a CLI (`diffdojo quiz`) run in a second terminal next to Claude Code.
-- Secondary UI (phase 2): a local web page on `127.0.0.1`.
+- Primary UI: inside Claude Code — the current question in a band above the prompt while Claude works, a `/dojo` pane, a status-line count and a toast for new questions (never in Claude's conversation).
+- Also: a CLI (`diffdojo quiz`) and a local web page on `127.0.0.1` (`diffdojo serve`).
 - Each question shows family, topic, difficulty, estimated time, grading type and, where relevant, the code location.
 - Quiet mode, a per-session question cap and snooze are available.
-- No notifications or text are ever injected into Claude's conversation.
+- Nothing is ever injected into Claude's conversation: the in-app UI draws in the interface only.
 
 ## Metrics (local, for the user and for the project's own evaluation)
 

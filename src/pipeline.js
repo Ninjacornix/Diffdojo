@@ -383,6 +383,7 @@ async function generate(opts) {
 async function onStop({ root, repoId, sessionId, transcriptPath, lastAssistantMessage, cfg, manual = false }) {
   return withLock(repoId, async () => {
     const db = store.open();
+    store.ensureRepo(db, root, repoId, true); // every project is tracked, no setup needed
     let sess = loadSession(repoId, sessionId);
     if (!sess) {
       // Session started before the repo was enabled (or SessionStart was missed):

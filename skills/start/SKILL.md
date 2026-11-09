@@ -1,11 +1,11 @@
 ---
 name: start
-description: Enable DiffDojo for the current git repository so it generates review questions about Claude's changes in the background. Use when the user runs /diffdojo:start or asks to turn DiffDojo on.
+description: Turn DiffDojo (back) on for the current git repository and optionally set its test command. DiffDojo already runs in every repo by default; this undoes /diffdojo:stop. Use when the user runs /diffdojo:start or asks to turn DiffDojo on.
 argument-hint: "[test command]"
 allowed-tools: Bash(node:*), Read, Glob
 ---
 
-Enable DiffDojo for this repository.
+DiffDojo runs in every git repository automatically once the plugin is enabled. This command turns it back on here if `/diffdojo:stop` turned it off, and records the snapshot it diffs against.
 
 1. Run:
    ```
@@ -21,8 +21,8 @@ Enable DiffDojo for this repository.
    The test command is the only project command DiffDojo ever runs, always in a temporary copy of the repository. It unlocks "write a killing test" questions, test-validated mutants and real bug reports.
 
 3. Tell the user, briefly:
-   - DiffDojo is now on for this repo only; everything stays on their machine.
-   - Questions appear after each of your turns; answer them in a second terminal with `node "${CLAUDE_PLUGIN_ROOT}/bin/diffdojo" quiz` (or `diffdojo quiz` if it is on their PATH), or in the browser with `... serve`.
+   - DiffDojo is on here (and in every other repo unless they stop it there); everything stays on their machine.
+   - Questions appear in a box above the prompt while you work: press 1-4 for multiple choice, ctrl+x tab to type an answer; `/dojo` opens the full pane.
    - The optional model path is off by default.
 
 Do not start a quiz yourself and do not answer questions for the user.

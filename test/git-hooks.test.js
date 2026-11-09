@@ -53,14 +53,46 @@ test('collector applies deny globs, size cap and the event file filter', () => {
   assert.deepStrictEqual(only.map((f) => f.file), ['other.py']);
 });
 
-test('hooks exit 0 silently for repos that are not enabled', () => {
+function editEvent(repo) {
+  return runHook('on-edit.js', { session_id: 's', cwd: repo, tool_name: 'Edit', tool_input: { file_path: path.join(repo, 'a.py') } });
+}
+
+test('autostart: every git repo is on by default, no /diffdojo:start needed', () => {
   const repo = makeRepo({ 'a.py': 'x = 1\n' });
+  const id = util.repoId(repo);
+  assert.ok(util.isEnabled(id));
+  assert.strictEqual(editEvent(repo).status, 0);
+  assert.ok(fs.existsSync(path.join(home, id, 'events.jsonl')), 'edit recorded without any setup');
+});
+
+test('/diffdojo:stop turns one repo off and wins over autostart', () => {
+  const repo = makeRepo({ 'a.py': 'x = 1\n' });
+  const id = util.repoId(repo);
+  fs.mkdirSync(path.join(home, id), { recursive: true });
+  fs.writeFileSync(path.join(home, id, 'disabled'), 'x');
+  assert.ok(!util.isEnabled(id));
   for (const s of ['on-session-start.js', 'on-edit.js', 'on-stop.js']) {
     const r = runHook(s, { session_id: 's', cwd: repo, tool_name: 'Edit', tool_input: { file_path: path.join(repo, 'a.py') } });
     assert.strictEqual(r.status, 0, s);
     assert.strictEqual(r.stdout, '', `${s} must not write to stdout`);
   }
-  assert.ok(!fs.existsSync(path.join(home, util.repoId(repo), 'events.jsonl')));
+  assert.ok(!fs.existsSync(path.join(home, id, 'events.jsonl')));
+});
+
+test('autoEnable false goes back to per-repo opt-in', () => {
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ autoEnable: false }));
+  try {
+    const repo = makeRepo({ 'a.py': 'x = 1\n' });
+    const id = util.repoId(repo);
+    assert.ok(!util.isEnabled(id));
+    editEvent(repo);
+    assert.ok(!fs.existsSync(path.join(home, id, 'events.jsonl')));
+    fs.mkdirSync(path.join(home, id), { recursive: true });
+    fs.writeFileSync(path.join(home, id, 'enabled'), 'x');
+    assert.ok(util.isEnabled(id), 'an explicit /diffdojo:start still turns it on');
+  } finally {
+    fs.unlinkSync(path.join(home, 'config.json'));
+  }
 });
 
 test('hooks never fail on garbage input and never exit 2', () => {

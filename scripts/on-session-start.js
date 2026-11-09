@@ -9,4 +9,6 @@ guard('on-session-start', () => {
   const c = context();
   if (!c) return;
   require('../src/pipeline').startSession(c.root, c.repoId, c.sessionId);
+  const store = require('../src/store');
+  store.ensureRepo(store.open(), c.root, c.repoId, true); // tracked globally from the first session
 });

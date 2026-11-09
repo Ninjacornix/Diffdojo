@@ -56,19 +56,17 @@ cd your-project
 claude --plugin-dir /path/to/Diffdojo
 ```
 
-**3. Turn it on for this project**
+**3. That's it — it's already on**
 
-Inside Claude Code, type:
+DiffDojo starts automatically in every git project you open with the plugin enabled; there's nothing to switch on. Your XP, belts and trophies are tracked across all your projects (`diffdojo stats` shows them, plus a list of every project).
 
-```
-/diffdojo:start
-```
-
-You can also tell it how to run your tests, which unlocks more question types:
+Optional: tell it how to run a project's tests, which unlocks more question types:
 
 ```
 /diffdojo:start npm test
 ```
+
+Don't want it in some project? Type `/diffdojo:stop` there. Prefer to opt in per project instead? Run `diffdojo config set autoEnable false --global` and use `/diffdojo:start` where you want it.
 
 **4. Keep working — questions pop up right inside Claude Code**
 
@@ -105,7 +103,7 @@ Questions about a change appear shortly after Claude finishes it; in between, yo
 | `/dojo` (in Claude Code) | Open the quiz pane beside the chat |
 | `diffdojo quiz` | Answer your queued questions in a terminal |
 | `diffdojo quiz --topic networking` | Practice a topic — no Claude session needed |
-| `diffdojo stats` | Your belts, XP, accuracy, streak and trophies |
+| `diffdojo stats` | Your belts, XP, accuracy, streak, trophies and projects — across everything (`--repo` for just this one) |
 | `diffdojo review` | Retry questions you got wrong |
 | `diffdojo exam cpp` | Take your next belt exam in a track |
 | `diffdojo serve` | Quiz in your browser (local only) |
@@ -122,7 +120,7 @@ Run `diffdojo help` for everything else.
 
 ## Your data stays yours
 
-- **Off by default.** DiffDojo only runs in projects where you typed `/diffdojo:start`.
+- **Your choice where it runs.** It's on in every git project by default; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
 - **Local only.** Everything is stored in `~/.diffdojo/` — never in your repo, never uploaded.
 - **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
 - **Never talks to Claude.** Nothing is ever injected into your conversation.

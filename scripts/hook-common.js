@@ -14,6 +14,8 @@ function context() {
   } catch {
     return null;
   }
+  // Every real hook payload carries a session id; anything else is not from Claude Code.
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.session_id !== 'string') return null;
   const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const root = util.findRepoRoot(cwd);
   if (!root) return null;

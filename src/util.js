@@ -42,8 +42,22 @@ function findRepoRoot(start) {
   }
 }
 
+/**
+ * Is DiffDojo on for this repo? An explicit `/diffdojo:stop` (a `disabled`
+ * marker) wins, then an explicit `/diffdojo:start`; otherwise the global
+ * `autoEnable` setting decides, which is on by default: once the plugin is
+ * enabled in Claude Code it runs in every git repository.
+ */
 function isEnabled(id) {
-  return fs.existsSync(path.join(repoDir(id), 'enabled'));
+  const d = repoDir(id);
+  if (fs.existsSync(path.join(d, 'disabled'))) return false;
+  if (fs.existsSync(path.join(d, 'enabled'))) return true;
+  return autoEnable();
+}
+
+function autoEnable() {
+  const cfg = readJson(path.join(home(), 'config.json'), {});
+  return cfg.autoEnable !== false;
 }
 
 function readJson(file, fallback) {
@@ -186,7 +200,7 @@ function dayKey(d = new Date()) {
 }
 
 module.exports = {
-  home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled,
+  home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled, autoEnable,
   readJson, writeJson, log, run, runShell, which, readStdin, nowIso, slug,
   shuffle, pick, rng, dayKey,
 };

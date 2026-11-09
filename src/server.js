@@ -132,8 +132,8 @@ function start({ db, repoId, root, port = 0 }) {
       }
       const p = url.pathname;
       if (p === '/' && req.method === 'GET') return send(200, PAGE, 'text/html; charset=utf-8');
-      if (p === '/api/next') return send(200, { header: stats.header(db, { repoId }), question: publicQuestion(queue.next(db, { repoId })) });
-      if (p === '/api/stats') return send(200, { text: stats.format(stats.compute(db, { repoId })), data: stats.compute(db, { repoId }) });
+      if (p === '/api/next') return send(200, { header: stats.header(db, {}), question: publicQuestion(queue.next(db, { repoId })) });
+      if (p === '/api/stats') return send(200, { text: stats.format(stats.compute(db, {})), data: stats.compute(db, {}) });
       if (p === '/api/topic' && req.method === 'POST') return send(200, { ids: queue.topicQuiz(db, { topic: String(body.topic || 'cpp/core'), count: 5 }) });
       const q = body.id ? queue.get(db, Number(body.id)) : null;
       if (!q) return send(404, { error: 'no such question' });

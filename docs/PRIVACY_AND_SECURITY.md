@@ -18,7 +18,7 @@ Nothing is written into the repository. `<repo-id>` is a hash of the repo's abso
 
 ## Controls
 
-- **Per-repo opt-in.** Hooks exit immediately for repos that haven't been enabled.
+- **Where it runs.** Once the plugin is enabled in Claude Code, DiffDojo runs in every git repository (`autoEnable`, on by default). `/diffdojo:stop` turns it off for one repository, and hooks exit immediately there; `diffdojo config set autoEnable false --global` restores per-repo opt-in with `/diffdojo:start`.
 - **Deny globs** (defaults): `.env*`, `*.pem`, `*.key`, `secrets/**`, `**/node_modules/**`, `**/build/**`, `**/dist/**`, lockfiles, binaries.
 - **Secret scan** of every excerpt before it's stored or sent to a model: common key and token patterns. Any match drops the excerpt.
 - **Transcript access is limited.** Only the Stop hook reads the transcript, only for enabled repos, only the turn that just ended, and only to extract Claude's explanation text. A setting turns "why" questions off entirely.

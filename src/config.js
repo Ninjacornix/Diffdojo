@@ -16,6 +16,9 @@ const DEFAULT_DENY = [
 ];
 
 const DEFAULTS = {
+  // Global only: run in every git repository unless /diffdojo:stop was used there.
+  // Set false to go back to per-repo opt-in with /diffdojo:start.
+  autoEnable: true,
   deny: DEFAULT_DENY,
   allow: [], // if non-empty, only these globs are considered
   maxChangedLines: 400, // per question batch

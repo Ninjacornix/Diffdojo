@@ -130,7 +130,7 @@ async function run(opts) {
     const last = db.get("SELECT batch FROM questions WHERE status = 'queued' AND repo_id = ? ORDER BY batch DESC LIMIT 1", repoId || '');
     return last ? db.get("SELECT COUNT(*) AS n FROM questions WHERE status = 'queued' AND batch = ?", last.batch).n : 0;
   })();
-  console.log(c.bold(stats.header(db, { newCount, repoId })));
+  console.log(c.bold(stats.header(db, { newCount })));
   console.log('');
 
   for (;;) {
@@ -195,7 +195,7 @@ async function run(opts) {
   const earned = rewards.totalXp(db) - startXp;
   const newTrophies = db.all('SELECT * FROM trophies').filter((t) => !trophiesBefore.has(t.id));
   if (answered) {
-    const s = stats.compute(db, { repoId });
+    const s = stats.compute(db, {});
     const top = s.tracks[0];
     console.log(c.bold('Recap: ') + `${answered} answered · +${earned} XP` +
       (top ? ` · ${top.belt} belt ${top.name}${top.next ? ` (${top.xp}/${top.nextAt} to ${top.next})` : ''}` : '') +

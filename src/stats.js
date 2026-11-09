@@ -58,6 +58,13 @@ function compute(db, { repoId } = {}) {
     bugs: db.all('SELECT id, title, file, report_path, track, created_at FROM bug_reports WHERE confirmed = 1 ORDER BY id DESC'),
     trophies: db.all('SELECT * FROM trophies ORDER BY awarded_at'),
     unlocks: tracks.map((t) => ({ track: t.track, features: rewards.UNLOCKS.filter((u) => rewards.beltIndex(t.belt) >= rewards.beltIndex(u[0])).map((u) => u[2]) })),
+    projects: db.all(
+      `SELECT r.path, r.enabled,
+        (SELECT COUNT(*) FROM questions q WHERE q.repo_id = r.id) AS generated,
+        (SELECT COUNT(*) FROM answers a JOIN questions q ON q.id = a.question_id WHERE q.repo_id = r.id AND a.correct IS NOT NULL) AS answered,
+        (SELECT COALESCE(SUM(amount), 0) FROM xp_events x WHERE x.repo_id = r.id) AS xp
+       FROM repos r ORDER BY xp DESC, generated DESC`,
+    ),
     xpToday: db.get("SELECT COALESCE(SUM(amount),0) AS n FROM xp_events WHERE day = ?", require('./util').dayKey()).n,
   };
 }
@@ -87,6 +94,11 @@ function format(s, { color = false } = {}) {
   lines.push('');
   lines.push(`Questions: ${s.counts.generated} generated · ${s.counts.answered} answered · ${s.counts.queued} queued · ${s.counts.skipped} skipped · ${s.counts.bad} marked bad${s.badRate != null ? ` (${s.badRate}%)` : ''}`);
   lines.push(`Real bugs caught in Claude's code: ${s.bugs.length}`);
+  if (s.projects && s.projects.length) {
+    lines.push('');
+    lines.push(`Projects tracked: ${s.projects.length}`);
+    for (const p of s.projects.slice(0, 8)) lines.push(`  ${p.enabled ? ' ' : '⏸'} ${require('path').basename(p.path).padEnd(28)} ${String(p.xp).padStart(5)} XP · ${p.answered} answered · ${p.generated} questions`);
+  }
   for (const b of s.bugs.slice(0, 5)) lines.push(`  • ${b.title} (${b.file || '?'}) → ${b.report_path}`);
   if (s.trophies.length) {
     lines.push('');
