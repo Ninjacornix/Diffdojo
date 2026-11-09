@@ -289,12 +289,12 @@ export function registerBattle(on: On) {
       control = <Select key="intro" autoFocus options={[{ value: 'go', label: i >= INTRO_STEPS ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => endIntro($)} />
     } else if (res) {
       const lines: string[] = []
-      if (res.correct) lines.push(`Correct! You hit ${res.enemyName} for ${res.damage}!${res.xp ? ` +${res.xp} XP` : ''}`)
+      if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage}!${res.xp ? ` +${res.xp} XP` : ''}`)
       else if (res.enemyMissed) lines.push(`Wrong, it was ${res.correctKey}... but ${res.enemyName} missed!`)
-      else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits you for ${res.enemyDamage}!`)
-      if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} fainted! Your HP is restored.`)
+      else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits ${res.playerName || 'You'} for ${res.enemyDamage}!`)
+      if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} fainted! ${res.playerName || 'You'}'s HP is restored.`)
       if (res.victory) lines.push(`${res.enemyName} is defeated! You cleared the ladder!`)
-      if (res.lifeLost && !res.gameOver) lines.push('You fainted! One life lost, HP restored.')
+      if (res.lifeLost && !res.gameOver) lines.push(`${res.playerName || 'You'} fainted! One life lost, HP restored.`)
       if (res.gameOver) lines.push('No lives left...')
       rows = lines.map(text => ({ text }))
       if (res.explanation) for (const x of wrap([res.explanation], W - 6).slice(0, 3)) rows.push({ text: x, dim: true })

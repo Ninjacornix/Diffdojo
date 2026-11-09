@@ -145,7 +145,7 @@ test('the terminal game plays a full exchange: intro, question, hit, next enemy'
   await G.press('enter');
   assert.strictEqual(G.g.phase, 'result');
   for (let i = 0; i < 20; i++) G.step();
-  assert.match(text(), /Correct! You hit TYPO SPRITE/);
+  assert.match(text(), /Correct! [A-Z0-9_.-]+ hits TYPO SPRITE/);
   for (const line of G.draw()) assert.strictEqual(line.reduce((n, s) => n + [...s.t].length, 0), 72, 'every row fills the screen width');
 });
 
@@ -159,4 +159,13 @@ test('the demo makes a sandbox project with questions about a simulated Claude c
   assert.ok(kinds.has('why'), 'why-Claude-did-it from the demo transcript');
   assert.ok(kinds.has('seeded_bug'));
   await assert.rejects(require('../src/demo').create({ dir }), /not empty/);
+});
+
+test('the player is named after the user, in caps', async () => {
+  const name = battle.playerName();
+  assert.match(name, /^[\p{Lu}\p{N}_.-]{1,12}$/u);
+  assert.strictEqual(battle.view().player.name, name);
+  battle.start('easy');
+  const r = await hit();
+  assert.strictEqual(r.playerName, name);
 });

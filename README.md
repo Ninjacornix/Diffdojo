@@ -38,6 +38,7 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 - **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, HP bars drain, and the text box arrow blinks.
 - **Questions about Claude's code** are generated in the background while it works (from each edit, and again when the turn ends), and they show up in the fight: Professional mode asks them first.
 - Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
+- You fight under your own name: your git user name, or your system username. Pick another with `diffdojo config set playerName "Alex" --global`.
 - In Claude Code: `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` switches back to the plain question box. Esc returns to your prompt.
 
 ## Try it without prompting Claude

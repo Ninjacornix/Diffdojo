@@ -52,6 +52,40 @@ const PLAYER_MAX = 100;
 const LIVES = 3;
 const DAMAGE = { easy: 35, medium: 40, hard: 50 };
 
+let cachedName = null;
+
+/**
+ * The player's name, shown in caps like the classic games: the configured
+ * playerName, else the git user name (first word), else the OS username.
+ */
+function playerName() {
+  if (cachedName) return cachedName;
+  let name = null;
+  try {
+    name = require('./config').load(null).playerName || null;
+  } catch {
+    /* no config */
+  }
+  if (!name) {
+    try {
+      const r = require('child_process').spawnSync('git', ['config', '--global', 'user.name'], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+      name = (r.stdout || '').trim() || null;
+    } catch {
+      /* no git */
+    }
+  }
+  if (!name) {
+    try {
+      name = require('os').userInfo().username;
+    } catch {
+      name = 'YOU';
+    }
+  }
+  const first = String(name).trim().split(/\s+/)[0] || 'YOU';
+  cachedName = first.replace(/[^\p{L}\p{N}_.-]/gu, '').toUpperCase().slice(0, 12) || 'YOU';
+  return cachedName;
+}
+
 function file() {
   return path.join(home(), 'battle.json');
 }
@@ -97,7 +131,7 @@ function view(s = load()) {
     wave: s.wave,
     lives: s.lives,
     maxLives: LIVES,
-    player: { name: 'YOU', hp: s.playerHp, maxHp: PLAYER_MAX },
+    player: { name: playerName(), hp: s.playerHp, maxHp: PLAYER_MAX },
     enemy: enemy ? { name: enemy.name, level: enemy.level, hp: s.enemyHp == null ? enemy.hp : s.enemyHp, maxHp: enemy.hp, id: enemy.id, boss: !!enemy.boss, color: enemy.color || null } : null,
     best: s.best,
     wins: s.wins,
@@ -215,7 +249,7 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   const graded = await require('./grader').answer(db, q, p.map[k], { mode: 'battle', cfg, root });
   const correct = graded.correct === true;
   const enemy = enemyOf(s);
-  const ev = { correct, correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, enemyName: enemy.name, trophies: graded.trophies || [] };
+  const ev = { correct, correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, enemyName: enemy.name, playerName: playerName(), trophies: graded.trophies || [] };
   ev.enemyHpBefore = s.enemyHp;
   ev.playerHpBefore = s.playerHp;
   if (correct) {
@@ -282,4 +316,4 @@ function resume() {
   return save(s);
 }
 
-module.exports = { load, save, view, start, quit, resume, nextQuestion, answer, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };
+module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };

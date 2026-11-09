@@ -71,6 +71,7 @@ export type BattleResult = {
   xp: number
   explanation: string | null
   enemyName: string
+  playerName?: string
   damage?: number
   enemyDamage?: number
   enemyMissed?: boolean

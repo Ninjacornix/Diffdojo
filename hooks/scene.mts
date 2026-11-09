@@ -257,7 +257,7 @@ export type SceneView = {
   wave: number
   lives: number
   maxLives: number
-  player: { hp: number; maxHp: number }
+  player: { name?: string; hp: number; maxHp: number }
   enemy: { id: string; name: string; level: number; hp: number; maxHp: number; boss: boolean } | null
 }
 
@@ -329,7 +329,7 @@ export function battlefield(s: SceneInput): Line[] {
   const sx = Math.max(pW + 6, W - 31)
   const pStatus: Line[] = inPlace
     ? [
-        [seg('YOU', PALETTE.ink, true)],
+        [seg(v.player.name || 'YOU', PALETTE.ink, true)],
         [seg(`  ${balls(v.lives, v.maxLives)}  lives`, PALETTE.ink)],
         [...hpBar(s.playerHp, v.player.maxHp)],
         [seg(`      ${String(s.playerHp).padStart(3)}/ ${v.player.maxHp}`, PALETTE.ink, true)],

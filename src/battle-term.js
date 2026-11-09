@@ -185,12 +185,12 @@ function game(scene, { db, repoId, root, cfg, width, rnd = Math.random }) {
     }
     // result
     const lines = [];
-    if (r.correct) lines.push(`Correct! You hit ${r.enemyName} for ${r.damage}!${r.xp ? ` +${r.xp} XP` : ''}`);
+    if (r.correct) lines.push(`Correct! ${r.playerName || 'You'} hits ${r.enemyName} for ${r.damage}!${r.xp ? ` +${r.xp} XP` : ''}`);
     else if (r.enemyMissed) lines.push(`Wrong, it was ${r.correctKey}... but ${r.enemyName} missed!`);
-    else lines.push(`Wrong, it was ${r.correctKey}! ${r.enemyName} hits you for ${r.enemyDamage}!`);
-    if (r.enemyDefeated && !r.victory) lines.push(`${r.enemyName} fainted! Your HP is restored.`);
+    else lines.push(`Wrong, it was ${r.correctKey}! ${r.enemyName} hits ${r.playerName || 'You'} for ${r.enemyDamage}!`);
+    if (r.enemyDefeated && !r.victory) lines.push(`${r.enemyName} fainted! ${r.playerName || 'You'}'s HP is restored.`);
     if (r.victory) lines.push(`${r.enemyName} is defeated! You cleared the ladder!`);
-    if (r.lifeLost && !r.gameOver) lines.push('You fainted! One life lost, HP restored.');
+    if (r.lifeLost && !r.gameOver) lines.push(`${r.playerName || 'You'} fainted! One life lost, HP restored.`);
     if (r.gameOver) lines.push('No lives left...');
     for (const t2 of r.trophies || []) lines.push(`Trophy: ${t2.name}`);
     rows = scene.wrap(lines, W - 6).map((text) => ({ text }));

@@ -21,6 +21,8 @@ const DEFAULTS = {
   autoEnable: true,
   // In-app battle mode: while Claude works, questions come as a turn-based fight. /battle off to use the plain question box.
   battle: true,
+  // Name shown in battles; empty = git user name, else the system username.
+  playerName: null,
   deny: DEFAULT_DENY,
   allow: [], // if non-empty, only these globs are considered
   maxChangedLines: 400, // per question batch

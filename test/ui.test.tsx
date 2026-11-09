@@ -144,7 +144,7 @@ function fakeBattle(on: any) {
     if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
     if (args[0] === 'battle-answer')
       body = {
-        correct: args[1] === 'b', correctKey: 'b', xp: 5, explanation: 'BFS explores by distance.', enemyName: 'TYPO SPRITE',
+        correct: args[1] === 'b', correctKey: 'b', xp: 5, explanation: 'BFS explores by distance.', enemyName: 'TYPO SPRITE', playerName: 'MILAN',
         damage: 35, enemyDamage: 15, enemyHpBefore: 60, enemyHpAfter: 25, playerHpBefore: 100, playerHpAfter: args[1] === 'b' ? 100 : 85,
         trophies: [], state: { ...FIGHT, enemy: { ...FIGHT.enemy, hp: 25 } },
       }
@@ -178,7 +178,7 @@ test('battle: pick a mode, fight with arrows + Enter, see the hit, continue', as
   expect(await ui.find({ key: 'q-11' })).toBeTruthy()
   await ui.select({ key: 'q-11', value: 'b' })
   expect(calls.some(c => c[0] === 'battle-answer' && c[1] === 'b')).toBe(true)
-  expect((await ui.find({ type: 'Text', text: /You hit TYPO SPRITE for 35/ }))?.text).toContain('+5 XP')
+  expect((await ui.find({ type: 'Text', text: /MILAN hits TYPO SPRITE for 35/ }))?.text).toContain('+5 XP')
   await ui.select({ key: 'continue', value: 'go' })
   expect(await ui.find({ key: 'q-11' })).toBeTruthy()
   await ui.unmount()
@@ -193,6 +193,6 @@ test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
   await ui.select({ key: 'intro', value: 'go' }) // skip the slide-in
   await ui.select({ key: 'intro', value: 'go' }) // continue
   await ui.select({ key: 'q-11', value: 'a' })
-  expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits you for 15/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits MILAN for 15/ })).toBeTruthy()
   await ui.unmount()
 })

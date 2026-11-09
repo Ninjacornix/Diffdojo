@@ -16,7 +16,7 @@ const W = 76
 const boss = battle.LADDERS.professional.find(e => e.boss)
 const view = {
   mode: 'professional', modeLabel: 'Professional', stage: 2, stages: 3, wave: 1, lives: 2, maxLives: 3,
-  player: { hp: 70, maxHp: battle.PLAYER_MAX },
+  player: { name: 'ALEX', hp: 70, maxHp: battle.PLAYER_MAX },
   enemy: { id: boss.id, name: boss.name, level: boss.level, hp: 108, maxHp: boss.hp, boss: true },
 }
 const field = scene.battlefield({ view, width: W, tick: 0, intro: scene.INTRO_STEPS, anim: null, enemyHp: 108, playerHp: 70 })
