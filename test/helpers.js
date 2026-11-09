@@ -50,7 +50,7 @@ function runHook(script, payload, env = {}) {
   const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', script)], {
     input: typeof payload === 'string' ? payload : JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: { ...process.env, DIFFDOJO_NO_MIDTURN: '1', ...env },
     timeout: 120000,
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, ms: Date.now() - t0 };

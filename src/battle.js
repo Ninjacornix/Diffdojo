@@ -10,65 +10,8 @@ const path = require('path');
 const { home, readJson, writeJson, shuffle, nowIso } = require('./util');
 const store = require('./store');
 
-const R = String.raw;
 
-// Every sprite has two idle frames; the UI alternates them and shakes/flashes on hits.
-const SPRITES = {
-  typo: [
-    [R`   .---.   `, R`  ( o o )  `, R`  (  ~  )  `, R`   \ - /   `, R`   /| |\   `],
-    [R`   .---.   `, R`  ( - - )  `, R`  (  o  )  `, R`   \ - /   `, R`  _/| |\_  `],
-  ],
-  gremlin: [
-    [R`  /\_/\    `, R` ( >.< )   `, R`  > ^ <~~  `, R` /|lint|\  `, R`  d   b    `],
-    [R`  /\_/\  ~ `, R` ( <.> )   `, R`  > v <    `, R` \|lint|/  `, R`   d b     `],
-  ],
-  imp: [
-    [R`   \|/     `, R`  (o_o)  +1`, R` <) n (>   `, R`  /   \    `, R` _|   |_   `],
-    [R`   /|\  +1 `, R`  (O_O)    `, R` (> n <)   `, R`  /   \    `, R`  |_ _|    `],
-  ],
-  null: [
-    [R`  .-"""-.  `, R` / x   x \ `, R`|  NULL   |`, R` \  ---  / `, R`  '-...-'  `],
-    [R`  .-"""-.  `, R` / o   o \ `, R`|  null   |`, R` \  ___  / `, R`  '-...-'  `],
-  ],
-  leak: [
-    [R`   _____   `, R`  ( o o )  `, R`  |  O  |  `, R`  | ::: |  `, R`  '~.~.~'  `, R`   . . .   `],
-    [R`   _____   `, R`  ( - - )  `, R`  |  o  |  `, R`  | ::: |  `, R`  '.~.~.'  `, R`  .  .  .  `],
-  ],
-  flaky: [
-    [R`  _______  `, R` | ? v x | `, R` |  o o  | `, R` |   ~   | `, R`  \_/ \_/  `],
-    [R`  _______  `, R` | x ? v | `, R` |  O O  | `, R` |   -   | `, R`  \_/ \_/  `],
-  ],
-  race: [
-    [R` >>>  <<<  `, R` (o)  (o)  `, R`  \ \/ /   `, R`  / /\ \   `, R` <<<  >>>  `],
-    [R` <<<  >>>  `, R`  (o)(o)   `, R`   \  /    `, R`   /  \    `, R` >>>  <<<  `],
-  ],
-  deadlock: [
-    [R` [o]==[o]  `, R`  |\  /|   `, R`  | \/ |   `, R`  | /\ |   `, R` [o]==[o]  `],
-    [R` [-]==[-]  `, R`  |\  /|   `, R`  | >< |   `, R`  | /\ |   `, R` [o]==[o]  `],
-  ],
-  heisen: [
-    [R`   . ? .   `, R`  ( o o )  `, R`   ) ~ (   `, R`  (  ?  )  `, R`   ' . '   `],
-    [R`  .  ?  .  `, R`  (     )  `, R`   )   (   `, R`  ( ... )  `, R`  '  .  '  `],
-  ],
-  segfault: [
-    [R`   _____   `, R`  / x x \  `, R` | 0xDEAD| `, R`  \_^_^_/  `, R`   /   \   `, R`  ~~   ~~  `],
-    [R`   _____   `, R`  / X X \  `, R` | 0xBEEF| `, R`  \_v_v_/  `, R`   \   /   `, R`   ~~ ~~   `],
-  ],
-  monolith: [
-    [R`  _______  `, R` |=======| `, R` |[o] [o]| `, R` |  ___  | `, R` |=======| `, R` |_______| `],
-    [R`  _______  `, R` |=======| `, R` |[-] [-]| `, R` |  ===  | `, R` |=======| `, R` |_______| `],
-  ],
-  // The final boss: an angry starburst in Claude-logo orange; the rays turn as it idles.
-  evil: [
-    [R`       \  |  /       `, R`   '.   \ | /   .'   `, R`     '. \|/ .'      `, R` ---- ( >_< ) ----  `, R`     .' /|\ '.      `, R`   .'   / | \   '.   `, R`       /  |  \       `],
-    [R`    \     |     /    `, R`     '.   |   .'     `, R`  '.  '. \|/ .'  .'  `, R` ==== ( >o< ) ====   `, R`  .'  .' /|\ '.  '.  `, R`     .'   |   '.     `, R`    /     |     \    `],
-  ],
-};
-
-const PLAYER = [
-  [R`    ___     `, R`   [___]    `, R`   (o_o)    `, R`  /|[_]|\   `, R`   _| |_    `],
-  [R`    ___     `, R`   [___]    `, R`   (o_o)  * `, R`  \|[_]|/   `, R`   _| |_    `],
-];
+// Sprites (pixel art) live in hooks/scene.ts, keyed by each enemy's id.
 
 // Balanced to be beatable: wrong answers hurt, but you get several mistakes per
 // life, and a wrong answer sometimes misses (MISS_CHANCE).
@@ -154,8 +97,8 @@ function view(s = load()) {
     wave: s.wave,
     lives: s.lives,
     maxLives: LIVES,
-    player: { name: 'YOU', hp: s.playerHp, maxHp: PLAYER_MAX, frames: PLAYER },
-    enemy: enemy ? { name: enemy.name, level: enemy.level, hp: s.enemyHp == null ? enemy.hp : s.enemyHp, maxHp: enemy.hp, frames: SPRITES[enemy.id], boss: !!enemy.boss, color: enemy.color || null } : null,
+    player: { name: 'YOU', hp: s.playerHp, maxHp: PLAYER_MAX },
+    enemy: enemy ? { name: enemy.name, level: enemy.level, hp: s.enemyHp == null ? enemy.hp : s.enemyHp, maxHp: enemy.hp, id: enemy.id, boss: !!enemy.boss, color: enemy.color || null } : null,
     best: s.best,
     wins: s.wins,
     hasQuestion: !!s.pending,
@@ -339,4 +282,4 @@ function resume() {
   return save(s);
 }
 
-module.exports = { load, save, view, start, quit, resume, nextQuestion, answer, toFour, enemyOf, LADDERS, MODES, SPRITES, PLAYER, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };
+module.exports = { load, save, view, start, quit, resume, nextQuestion, answer, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };

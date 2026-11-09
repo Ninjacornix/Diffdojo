@@ -1,4 +1,4 @@
-# DiffDojo 🥋
+# DiffDojo
 
 **Learn from the code Claude writes for you — while it writes it.**
 
@@ -12,54 +12,68 @@ Everything runs on your machine. No accounts, no servers, nothing uploaded.
 
 ## What kind of questions?
 
-**🐛 Code challenges** — built from the code Claude just changed
+**Code challenges** — built from the code Claude just changed
 - *Spot the bug:* DiffDojo copies one of Claude's functions, quietly breaks one line, and asks you which one.
 - *Predict the output:* what does this function return for this input? (DiffDojo actually runs it to know the answer.)
 - *Write a test:* write a test that would catch a hidden bug in this function.
 
-**🏗️ Design questions** — about the choices Claude made
+**Design questions** — about the choices Claude made
 - What data structure did Claude use here? Which file owns this logic now? What calls what?
 - *Why did Claude do this?* — checked against what Claude actually said in your session.
 
-**📚 Concept quizzes** — on the topics you're working in
+**Concept quizzes** — on the topics you're working in
 - 200+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
 
 Every answer is checked against real evidence — running the code, reading it, or reviewed answer keys — not guesswork.
 
-## ⚔️ Battle mode
+## Battle mode
 
-While Claude works, the questions turn into a retro turn-based fight drawn in ASCII art above your prompt — only the tail of Claude's latest output stays in view:
+While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles (with original characters). The real thing is in color on a pale green-gray screen:
 
 ```
-╭────────────────────────────────╮
-│ EVIL CLAUDE ☠                  │               \  |  /
-│ Lv99 · Professional 3/3        │           '.   \ | /   .'
-│ HP ████████████░░░░░░░░        │             '. \|/ .'
-│    108/180                     │         ---- ( >_< ) ----
-╰────────────────────────────────╯             .' /|\ '.
-                                           .'   / | \   '.
-      ___                                      /  |  \
-     [___]                         ╭────────────────────────────────╮
-     (o_o)                         │ YOU  ♥♥♡                       │
-    /|[_]|\                        │ HP ██████████████░░░░░░        │
-     _| |_                         │    70/100                      │
-                                   ╰────────────────────────────────╯
-╔══════════════════════════════════════════════════════════════════╗
-║ EVIL CLAUDE asks:  Code challenge · hard · src/net/retry.cpp     ║
-║ One line was changed in this copy of `drain()`. Pick the line.   ║
-║ ❯ a) line 4: while (!pending_.empty() || pending_.top()...       ║
-║   b) line 6: pending_.pop();                                     ║
-║   c) line 2: std::lock_guard<std::mutex> guard(mu_);             ║
-║   d) line 7: n++;                                                ║
-╚══════════════════════════════════════════════════════════════════╝
+ TYPO SPRITE                                        ▀▄   ▄▀
+      :L3                                        ▄▄▀▀▀▀▀▀▀▀▀▄▄
+   HP:▐████████████████▌                        ███▀▀█████▀▀███
+ │ ●●●                                         ████▀▀█████▀▀████
+ └──────────────────────────▶                  ▀▀███▀▀▀▀▀▀▀███▀▀
+                                                ▀▀▀▀███████▀▀▀▀
+                                                ▄▀  ▀▀▀▀▀▀▀  ▀▄
+           ▄▄▄▄▄▄
+        ▄▀▀██████▀▀▄
+       █▀▀▀▀▀▀▀▀▀▀▀▀█
+     ▄▀██████████████▀▄
+     ▀▀██████████████▀▀            YOU
+      ▄▄█▀▀▀████▀▀▀█▄▄               ●●●  lives
+   ▄▀▀███████▀▀███████▀▀▄          HP:▐████████████████▌
+  ██████████▀▄▄▀██████████               100/ 100
+  ████▀▀▀███████████▀▀▀███         ◀──────────────────────────┘
+══════════════════════════════════════════════════════════════════
+  TYPO SPRITE asks: `for (auto x : items) x.count++;` — what
+  happens to items?
+▶ a) Compilation error
+  b) Nothing; x is a copy of each element
+  c) Each element's count is incremented
+  d) Only the first element changes
+══════════════════════════════════════════════════════════════════
 ```
 
-- **↑/↓ to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (sometimes it misses!).
-- Beat an enemy and your HP is fully restored for the next one. You have **3 lives** — lose them all and you start the ladder over.
-- **Modes:** Easy · Medium · Hard · **Professional**, whose final boss is **Evil Claude** · **Endless** (waves get stronger; your best wave is recorded).
-- Everything idles and animates: sprites bob and blink, hits shake and flash, HP bars drain.
-- Battle answers count like any other: XP, belts, stats — plus trophies for clearing each ladder.
-- `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` goes back to the plain question box. Esc returns to your prompt.
+- **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses).
+- Beat an enemy and your HP is fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
+- **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst) and **Endless** (waves get stronger; your best wave is recorded).
+- **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, HP bars drain, and the text box arrow blinks.
+- **Questions about Claude's code** are generated in the background while it works (from each edit, and again when the turn ends), and they show up in the fight: Professional mode asks them first.
+- Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
+- In Claude Code: `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` switches back to the plain question box. Esc returns to your prompt.
+
+## Try it without prompting Claude
+
+```bash
+diffdojo demo      # makes ~/diffdojo-demo: a small project with a simulated Claude change, already turned into questions
+cd ~/diffdojo-demo
+diffdojo battle    # play the battle right in this terminal (no Claude Code needed)
+```
+
+Or open the demo in Claude Code (`claude --plugin-dir /path/to/Diffdojo`) and type `/battle` or `/dojo`. No need to ask Claude for anything first. `diffdojo battle` works in any project, too; `diffdojo battle --snapshot` prints a few frames instead of playing.
 
 ## Earn your belts
 
@@ -109,7 +123,7 @@ While Claude is working, the current question appears in a box just above your p
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
-│ 🥋 DiffDojo · Design · Data structure · verified · 10 XP     │
+│ DiffDojo · Design · Data structure · verified · 10 XP     │
 │ `jobs` is declared in sched.py:8 in Claude's change. What is it? │
 │ 1 a) dict                                                    │
 │ 2 b) list used as a binary heap (heapq)                      │

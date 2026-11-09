@@ -1,34 +1,35 @@
-// DiffDojo Battle: the in-app, turn-based quiz fight drawn while Claude works.
-// Laid out like a classic handheld RPG battle (original characters): the enemy
-// top right, you bottom left, HP bars, and a text box with four answers picked
-// with the arrow keys and Enter. Idle frames alternate; hits shake, flash and
-// drain the HP bar. Game rules live in the CLI (src/battle.js); this draws.
+// DiffDojo Battle inside Claude Code: the turn-based quiz fight drawn while
+// Claude works. The screen itself comes from ./scene.mts (shared with the
+// terminal game `diffdojo battle`); this module adds input, timers and state.
+// Rules and questions live in the CLI (src/battle.js).
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
 import type { BattleQuestion, BattleResult, BattleView, BattleAnim } from '../types'
+import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
+import type { BoxRow, Line } from './scene.mts'
 
 type Engine = EngineInterface
 
 export const BATTLE_PANE = 'dojo-battle'
 
-export const battleOn = atom({ plugin: 'diffdojo', key: 'battleOn' } as const, true)
-const scene = atom({ plugin: 'diffdojo', key: 'battleScene' } as const, null, { shape: 'scene-1' })
-const after = atom({ plugin: 'diffdojo', key: 'battleAfter' } as const, null, { shape: 'scene-1' })
+const battleOn = atom({ plugin: 'diffdojo', key: 'battleOn' } as const, true)
+const scene = atom({ plugin: 'diffdojo', key: 'battleScene' } as const, null, { shape: 'scene-2' })
+const after = atom({ plugin: 'diffdojo', key: 'battleAfter' } as const, null, { shape: 'scene-2' })
 const question = atom({ plugin: 'diffdojo', key: 'battleQuestion' } as const, null, { shape: 'bq-1' })
 const outcome = atom({ plugin: 'diffdojo', key: 'battleResult' } as const, null, { shape: 'br-1' })
 const anim = atom({ plugin: 'diffdojo', key: 'battleAnim' } as const, null, { shape: 'anim-1' })
+const intro = atom({ plugin: 'diffdojo', key: 'battleIntro' } as const, -1)
 const tick = atom({ plugin: 'diffdojo', key: 'battleTick' } as const, 0)
 const busy = atom({ plugin: 'diffdojo', key: 'battleBusy' } as const, false)
 
-const ANIM_FRAMES = 10
 const IDLE_MS = 650
-const ANIM_MS = 90
+const FRAME_MS = 90
 
 // Module timers (a reload drops them; the next open restarts them).
 let idleTimer: { cancel: () => void } | null = null
-let animTimer: { cancel: () => void } | null = null
+let frameTimer: { cancel: () => void } | null = null
 
 type Api = Record<string, any>
 
@@ -40,6 +41,28 @@ async function cli($: Engine, args: string[]): Promise<Api> {
     $.ui.log(`diffdojo battle: ${String(err)}`, { to: 'debug' })
     return { error: String(err) }
   }
+}
+
+/** One timer drives the intro slide-in and the hit animation. */
+function frames($: Engine) {
+  if (frameTimer) return
+  frameTimer = $.clock.every(FRAME_MS, async () => {
+    const i = await read($, intro)
+    const a = await read($, anim)
+    const sliding = i >= 0 && i < INTRO_STEPS
+    const hitting = !!a && a.frame < ANIM_FRAMES
+    if (sliding) await update($, intro, n => Math.min(INTRO_STEPS, n + 1))
+    if (hitting) await update($, anim, cur => (cur ? { ...cur, frame: cur.frame + 1 } : cur))
+    if (!sliding && !hitting) {
+      frameTimer?.cancel()
+      frameTimer = null
+    }
+  })
+}
+
+async function startIntro($: Engine) {
+  await update($, intro, () => 0)
+  frames($)
 }
 
 async function loadQuestion($: Engine) {
@@ -57,32 +80,23 @@ async function sync($: Engine) {
   if (r.battle !== undefined) await update($, battleOn, () => r.battle !== false)
   if (!r.state) return
   await update($, scene, () => r.state as BattleView)
-  if (r.state.phase === 'fight' && !(await read($, question)) && !(await read($, outcome))) await loadQuestion($)
+  if (r.state.phase === 'fight' && !(await read($, question)) && !(await read($, outcome)) && (await read($, intro)) < 0) await startIntro($)
 }
 
 export async function openBattle($: Engine, focus: boolean) {
   await sync($)
-  const opened = await $.ui.open({ id: BATTLE_PANE, title: 'DiffDojo Battle', rows: 30, closeOnEscape: true, ...(focus ? { focus: true as const } : {}) })
-  if (opened.isPlaced) startIdle($)
-}
-
-function startIdle($: Engine) {
-  idleTimer?.cancel()
-  idleTimer = $.clock.every(IDLE_MS, () => update($, tick, n => (n + 1) % 1000))
-}
-
-function play($: Engine, kind: BattleAnim['kind']) {
-  animTimer?.cancel()
-  void update($, anim, () => ({ kind, frame: 0 }))
-  animTimer = $.clock.every(ANIM_MS, async () => {
-    const a = await read($, anim)
-    if (!a || a.frame >= ANIM_FRAMES) {
-      animTimer?.cancel()
-      animTimer = null
-      return
-    }
-    await update($, anim, cur => (cur ? { ...cur, frame: cur.frame + 1 } : cur))
+  const opened = await $.ui.open({
+    id: BATTLE_PANE,
+    title: 'DiffDojo Battle',
+    rows: 32,
+    closeOnEscape: true,
+    backgroundColor: PALETTE.bg,
+    ...(focus ? { focus: true as const } : {}),
   })
+  if (opened.isPlaced) {
+    idleTimer?.cancel()
+    idleTimer = $.clock.every(IDLE_MS, () => update($, tick, n => (n + 1) % 1000))
+  }
 }
 
 async function choose($: Engine, mode: string) {
@@ -91,6 +105,16 @@ async function choose($: Engine, mode: string) {
   await update($, outcome, () => null)
   await update($, question, () => null)
   await update($, scene, () => r.state as BattleView)
+  await startIntro($)
+}
+
+async function endIntro($: Engine) {
+  const i = await read($, intro)
+  if (i >= 0 && i < INTRO_STEPS) {
+    await update($, intro, () => INTRO_STEPS) // Enter skips the slide-in
+    return
+  }
+  await update($, intro, () => -1)
   await loadQuestion($)
 }
 
@@ -104,27 +128,31 @@ async function attack($: Engine, key: string) {
     if (r.error) return $.ui.toast(`DiffDojo: ${r.error}`)
     await update($, outcome, () => ({ ...(r as BattleResult), picked: key, prompt: q.prompt }))
     await update($, after, () => r.state as BattleView)
-    play($, r.correct ? 'enemyHit' : r.enemyMissed ? 'dodge' : 'playerHit')
-    for (const t of r.trophies ?? []) $.ui.toast(`🏆 ${t.name}`, { timeoutMs: 9000 })
+    await update($, anim, () => ({ kind: r.correct ? 'enemyHit' : r.enemyMissed ? 'dodge' : 'playerHit', frame: 0 }) as BattleAnim)
+    frames($)
+    for (const t of r.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 9000 })
   } finally {
     await update($, busy, () => false)
   }
 }
 
 async function proceed($: Engine) {
+  const res = await read($, outcome)
   const next = await read($, after)
   await update($, outcome, () => null)
   await update($, question, () => null)
   await update($, anim, () => null)
   if (next) await update($, scene, () => next)
-  if (next && next.phase === 'fight') await loadQuestion($)
+  if (!next || next.phase !== 'fight') return
+  if (res && res.enemyDefeated) await startIntro($) // a new enemy slides in
+  else await loadQuestion($)
 }
 
 async function again($: Engine) {
   const r = await cli($, ['battle-resume'])
   await update($, scene, () => r.state as BattleView)
   await update($, outcome, () => null)
-  await loadQuestion($)
+  await startIntro($)
 }
 
 async function toMenu($: Engine) {
@@ -132,25 +160,15 @@ async function toMenu($: Engine) {
   await update($, scene, () => r.state as BattleView)
   await update($, outcome, () => null)
   await update($, question, () => null)
+  await update($, intro, () => -1)
 }
 
-// ---------- drawing helpers (pure)
-
-function hpBar(hp: number, max: number, cells = 20) {
-  const n = Math.max(0, Math.min(cells, Math.round((hp / max) * cells)))
-  return { bar: '█'.repeat(n) + '░'.repeat(cells - n), color: hp / max > 0.5 ? 'green' : hp / max > 0.2 ? 'yellow' : 'red' }
-}
-
-function lerp(a: number, b: number, t: number) {
-  return Math.round(a + (b - a) * Math.min(1, t))
-}
-
-const TITLE = [
-  ' ___  _  __  __ ___      _         ___   _ _____ _____ _    ___ ',
-  '|   \\(_)/ _|/ _|   \\ ___(_)___    | _ ) /_\\_   _|_   _| |  | __|',
-  '| |) | |  _|  _| |) / _ \\ / _ \\   | _ \\/ _ \\| |   | | | |__| _| ',
-  '|___/|_|_| |_| |___/\\___/ \\___/   |___/_/ \\_\\_|   |_| |____|___|',
-  '                     |__/                                        ',
+const MODES = [
+  ['easy', 'Easy', 'Typo Sprite, Lint Gremlin, Off-by-One Imp'],
+  ['medium', 'Medium', 'Null Pointer, Memory Leak, Flaky Test'],
+  ['hard', 'Hard', 'Race Condition, Deadlock Twins, Heisenbug'],
+  ['professional', 'Professional', 'Segfault Specter, Legacy Monolith, EVIL CLAUDE'],
+  ['endless', 'Endless', 'waves that keep coming'],
 ]
 
 /** Called from the plugin's one session.start hook. */
@@ -160,7 +178,6 @@ export async function battleSessionStart($: Engine) {
 }
 
 export function registerBattle(on: On) {
-
   on('command.run', { command: 'battle' }, async ($, e) => {
     const arg = (e.args || '').trim().toLowerCase()
     if (arg === 'off' || arg === 'on') {
@@ -171,7 +188,7 @@ export function registerBattle(on: On) {
     }
     if (arg === 'menu') await toMenu($)
     await openBattle($, true)
-    return { text: 'DiffDojo Battle opened. Arrows + Enter to fight, Esc to return to the prompt.' }
+    return { text: 'DiffDojo Battle opened. Up/down and Enter to fight, Esc to return to the prompt.' }
   })
 
   on('ui.close', async ($, e, next) => {
@@ -188,36 +205,47 @@ export function registerBattle(on: On) {
     const q = await read($, question)
     const res = await read($, outcome)
     const a = await read($, anim)
+    const i = await read($, intro)
     const t = await read($, tick)
-    const width = Math.max(40, Math.min(e.props.bodyColumns || 80, 100))
+    const W = Math.max(56, Math.min((e.props.bodyColumns || 80) - 1, 92))
+
+    // Scene lines; single-segment rows stay one Text so they read as one string.
+    const draw = (lines: Line[]) =>
+      lines.map(l =>
+        l.length === 1 ? (
+          <Text color={l[0].c} backgroundColor={l[0].bg} bold={!!l[0].b}>{l[0].t}</Text>
+        ) : (
+          <Text>
+            {l.map(sg => (
+              <Text color={sg.c} backgroundColor={sg.bg} bold={!!sg.b}>{sg.t}</Text>
+            ))}
+          </Text>
+        ),
+      )
+    const rule = <Text color={PALETTE.ink} backgroundColor={PALETTE.bg}>{'═'.repeat(W)}</Text>
+    const rowsOf = (rows: BoxRow[]) => draw(box(rows, W, t, false, 0).slice(1, -1))
 
     // ---- menu
     if (!s || !s.mode || s.phase === 'menu') {
       const best = (s && s.best) || {}
       const wins = (s && s.wins) || {}
-      const modes = [
-        ['easy', 'Easy', 'Typo Sprite, Lint Gremlin, Off-by-One Imp'],
-        ['medium', 'Medium', 'Null Pointer, Memory Leak, Flaky Test'],
-        ['hard', 'Hard', 'Race Condition, Deadlock Twins, Heisenbug'],
-        ['professional', 'Professional', '... and EVIL CLAUDE awaits'],
-        ['endless', 'Endless', `waves that keep coming${best.endless ? ` · best wave ${best.endless}` : ''}`],
-      ]
       return (
-        <Box flexDirection="column">
-          {TITLE.map((l, i) => (
-            <Text color={i % 2 === t % 2 ? 'cyan' : 'blue'}>{l}</Text>
-          ))}
-          <Text> </Text>
-          <Text>Answer right to strike. Answer wrong and they strike back. 3 lives.</Text>
-          <Text> </Text>
+        <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+          {draw([plain('', W), ...TITLE.map((l, n) => plain('   ' + l, W, n % 2 === t % 2 ? PALETTE.ink : PALETTE.mid, true)), plain('', W)])}
+          {draw([plain('   Answer right to strike. Answer wrong and they strike back. 3 lives.', W), plain('', W)])}
+          {rule}
           <Select
             key="mode"
             label="Choose your fight"
             autoFocus
-            options={modes.map(([value, label, who]) => ({ value, label: `${label.padEnd(13)} ${who}${wins[value] ? `  ★×${wins[value]}` : ''}` }))}
+            options={MODES.map(([value, label, who]) => ({
+              value,
+              label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${wins[value] ? `  cleared x${wins[value]}` : ''}`,
+            }))}
             onSelect={value => choose($, value)}
           />
-          <Text dimColor>↑/↓ to choose · Enter to fight · Esc back to the prompt</Text>
+          {rule}
+          <Text dimColor>up/down choose · Enter fight · Esc back to the prompt</Text>
         </Box>
       )
     }
@@ -225,15 +253,13 @@ export function registerBattle(on: On) {
     // ---- game over / victory
     if (s.phase === 'gameover' || s.phase === 'victory') {
       const won = s.phase === 'victory'
+      const id = won && s.mode === 'professional' ? 'evil' : 'player'
       return (
-        <Box flexDirection="column" alignItems="center">
-          <Text bold color={won ? 'yellow' : 'red'}>{won ? '★ ★ ★   V I C T O R Y   ★ ★ ★' : 'G A M E   O V E R'}</Text>
-          <Text> </Text>
-          {(won ? s.enemy?.frames?.[t % 2] ?? [] : s.player.frames[t % 2]).map(l => (
-            <Text color={won ? 'gray' : 'red'} dimColor>{l}</Text>
-          ))}
-          <Text> </Text>
-          <Text>{won ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : ''}` : 'Out of lives. Back to the first enemy, full health, 3 lives.'}</Text>
+        <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+          {draw([plain('', W), plain(won ? '        V I C T O R Y' : '        G A M E   O V E R', W, won ? PALETTE.ink : PALETTE.hurt, true), plain('', W)])}
+          {draw(spriteLines(id, t).map(l => pad(join([], l, 8), W)))}
+          {rule}
+          {rowsOf([{ text: won ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : ''}` : 'Out of lives. Back to the first enemy with full health and 3 lives.' }])}
           <Select
             key="end"
             autoFocus
@@ -243,106 +269,61 @@ export function registerBattle(on: On) {
             ]}
             onSelect={v => (v === 'again' ? again($) : toMenu($))}
           />
+          {rule}
         </Box>
       )
     }
 
-    // ---- the fight
+    // ---- the fight (the scene stays the pre-answer one until Continue)
     const enemy = s.enemy!
-    const p = s.player
     const progress = a ? a.frame / ANIM_FRAMES : 1
-    const enemyHp = res && a?.kind === 'enemyHit' ? lerp(res.enemyHpBefore, res.enemyHpAfter, progress) : res ? res.enemyHpAfter : enemy.hp
-    const playerHp = res && a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter, progress) : res ? res.playerHpAfter : p.hp
-    const hitFrame = !!a && a.frame < 6
-    const enemyShake = a?.kind === 'enemyHit' && hitFrame ? (a.frame % 2 ? 3 : 0) : 0
-    const playerShake = a?.kind === 'playerHit' && hitFrame ? (a.frame % 2 ? 2 : 0) : 0
-    const dodgeSlide = a?.kind === 'dodge' && hitFrame ? Math.min(a.frame, 6 - a.frame) * 2 : 0
-    const enemyBob = t % 2
-    const eBar = hpBar(enemyHp, enemy.maxHp)
-    const pBar = hpBar(playerHp, p.maxHp)
-    const enemyColor = a?.kind === 'enemyHit' && hitFrame && a.frame % 2 ? 'red' : enemy.color || 'white'
-    const playerColor = a?.kind === 'playerHit' && hitFrame && a.frame % 2 ? 'red' : 'white'
-    const hearts = '♥'.repeat(s.lives) + '♡'.repeat(Math.max(0, s.maxLives - s.lives))
-    const where = s.mode === 'endless' ? `WAVE ${s.wave}` : `${s.modeLabel} ${s.stage + 1}/${s.stages}`
-    const fx = a?.kind === 'enemyHit' && hitFrame ? (a.frame % 2 ? '  ✶ ✷ ✶' : ' ✷  ✶') : a?.kind === 'dodge' && hitFrame ? '  MISS!' : ''
+    const lerp = (x: number, y: number) => Math.round(x + (y - x) * Math.min(1, progress))
+    const enemyHp = res ? (a?.kind === 'enemyHit' ? lerp(res.enemyHpBefore, res.enemyHpAfter) : res.enemyHpAfter) : enemy.hp
+    const playerHp = res ? (a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter) : res.playerHpAfter) : s.player.hp
+    const sliding = i >= 0
+    const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp })
+
+    let rows: BoxRow[] = []
+    let control: unknown = null
+    if (sliding) {
+      rows = wrap([enemy.boss ? `${enemy.name} appears! The final battle begins!` : `${enemy.name} wants to fight!`], W - 6).map(text => ({ text }))
+      control = <Select key="intro" autoFocus options={[{ value: 'go', label: i >= INTRO_STEPS ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => endIntro($)} />
+    } else if (res) {
+      const lines: string[] = []
+      if (res.correct) lines.push(`Correct! You hit ${res.enemyName} for ${res.damage}!${res.xp ? ` +${res.xp} XP` : ''}`)
+      else if (res.enemyMissed) lines.push(`Wrong, it was ${res.correctKey}... but ${res.enemyName} missed!`)
+      else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits you for ${res.enemyDamage}!`)
+      if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} fainted! Your HP is restored.`)
+      if (res.victory) lines.push(`${res.enemyName} is defeated! You cleared the ladder!`)
+      if (res.lifeLost && !res.gameOver) lines.push('You fainted! One life lost, HP restored.')
+      if (res.gameOver) lines.push('No lives left...')
+      rows = lines.map(text => ({ text }))
+      if (res.explanation) for (const x of wrap([res.explanation], W - 6).slice(0, 3)) rows.push({ text: x, dim: true })
+      const done = !a || a.frame >= ANIM_FRAMES
+      control = <Select key="continue" autoFocus options={[{ value: 'go', label: done ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => proceed($)} />
+    } else if (q) {
+      rows = wrap([`${enemy.name} asks: ${q.prompt}`], W - 6).map(text => ({ text }))
+      if (q.location) rows.push({ text: `${q.family} · ${q.difficulty} · ${q.location}`, dim: true })
+      if (q.code && q.code.split('\n').length <= 10) for (const c of q.code.split('\n')) rows.push({ text: '  ' + c, dim: true })
+      control = (
+        <Select
+          key={`q-${q.id}`}
+          autoFocus
+          options={Object.entries(q.choices).map(([k, val]) => ({ value: k, label: `${k}) ${val}` }))}
+          onSelect={value => attack($, value)}
+        />
+      )
+    } else {
+      rows = [{ text: `${enemy.name} is thinking${'.'.repeat((t % 3) + 1)}` }]
+    }
 
     return (
-      <Box flexDirection="column" width={width}>
-        {/* enemy: info box left, sprite right */}
-        <Box justifyContent="space-between">
-          <Box flexDirection="column" borderStyle="round" paddingX={1} width={34}>
-            <Text bold color={enemy.boss ? enemy.color || 'magenta' : undefined}>{`${enemy.name}${enemy.boss ? ' ☠' : ''}`}</Text>
-            <Text dimColor>{`Lv${enemy.level} · ${where}`}</Text>
-            <Text>
-              <Text dimColor>HP </Text>
-              <Text color={eBar.color}>{eBar.bar}</Text>
-            </Text>
-            <Text dimColor>{`   ${enemyHp}/${enemy.maxHp}`}</Text>
-          </Box>
-          <Box flexDirection="column" marginLeft={enemyShake} marginTop={enemyBob} marginRight={2}>
-            {enemy.frames[t % 2].map(l => (
-              <Text color={enemyColor} bold={!!enemy.boss}>{l}</Text>
-            ))}
-            {fx ? <Text color="yellow" bold>{fx}</Text> : null}
-          </Box>
-        </Box>
-        {/* you: sprite left, info box right */}
-        <Box justifyContent="space-between">
-          <Box flexDirection="column" marginLeft={2 + playerShake + dodgeSlide} marginTop={1 - enemyBob}>
-            {p.frames[(t + 1) % 2].map(l => (
-              <Text color={playerColor}>{l}</Text>
-            ))}
-          </Box>
-          <Box flexDirection="column" borderStyle="round" paddingX={1} width={34}>
-            <Text bold>
-              {'YOU  '}
-              <Text color="red">{hearts}</Text>
-            </Text>
-            <Text>
-              <Text dimColor>HP </Text>
-              <Text color={pBar.color}>{pBar.bar}</Text>
-            </Text>
-            <Text dimColor>{`   ${playerHp}/${p.maxHp}`}</Text>
-          </Box>
-        </Box>
-        {/* text box */}
-        <Box flexDirection="column" borderStyle="double" paddingX={1}>
-          {res ? (
-            <Box flexDirection="column">
-              <Text bold color={res.correct ? 'green' : res.enemyMissed ? 'yellow' : 'red'}>
-                {res.correct
-                  ? `Correct! You hit ${res.enemyName} for ${res.damage}!${res.xp ? `  +${res.xp} XP` : ''}`
-                  : res.enemyMissed
-                    ? `Wrong (it was ${res.correctKey})... but ${res.enemyName} missed!`
-                    : `Wrong, it was ${res.correctKey}! ${res.enemyName} hits you for ${res.enemyDamage}!`}
-              </Text>
-              {res.enemyDefeated && !res.victory ? <Text color="green">{`${res.enemyName} fainted! HP restored. ${res.nextEnemy} appears!`}</Text> : null}
-              {res.victory ? <Text bold color="yellow">{`${res.enemyName} is defeated! You cleared the ladder!`}</Text> : null}
-              {res.lifeLost && !res.gameOver ? <Text color="red">You fainted! One life lost, HP restored.</Text> : null}
-              {res.gameOver ? <Text bold color="red">No lives left...</Text> : null}
-              {res.explanation ? <Text dimColor wrap="wrap">{res.explanation}</Text> : null}
-              <Select key="continue" autoFocus options={[{ value: 'go', label: '▶ Continue' }]} onSelect={() => proceed($)} />
-            </Box>
-          ) : q ? (
-            <Box flexDirection="column">
-              <Text>
-                <Text bold color={enemy.color || 'cyan'}>{`${enemy.name} asks: `}</Text>
-                <Text dimColor>{`${q.family} · ${q.difficulty}${q.location ? ` · ${q.location}` : ''}`}</Text>
-              </Text>
-              <Text wrap="wrap">{q.prompt}</Text>
-              {q.code && q.code.split('\n').length <= 12 ? <Text dimColor>{q.code}</Text> : null}
-              <Select
-                key={`q-${q.id}`}
-                autoFocus
-                options={Object.entries(q.choices).map(([k, v]) => ({ value: k, label: `${k}) ${v}` }))}
-                onSelect={value => attack($, value)}
-              />
-              <Text dimColor>↑/↓ pick · Enter attack · Esc back to the prompt</Text>
-            </Box>
-          ) : (
-            <Text dimColor>{`${enemy.name} is thinking${'.'.repeat((t % 3) + 1)}`}</Text>
-          )}
-        </Box>
+      <Box flexDirection="column" backgroundColor={PALETTE.bg}>
+        {draw(field)}
+        {rule}
+        {rowsOf(rows)}
+        {control}
+        {rule}
       </Box>
     )
   })

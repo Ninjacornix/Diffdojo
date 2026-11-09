@@ -84,7 +84,7 @@ async function load() {
       (r.answerText ? '<div>Answer: <b>'+esc(r.answerText)+'</b></div>' : '') + (r.detail ? '<pre>'+esc(r.detail)+'</pre>' : '') +
       '<div class="explain">'+esc(r.explanation||'')+'</div>' + (r.evidence ? '<div class="mut explain">Evidence: '+esc(r.evidence)+'</div>' : '') +
       (r.feedback ? '<div class="explain">Feedback (no XP): '+esc(r.feedback)+'</div>' : '') +
-      (r.trophies||[]).map((t) => '<div class="label">🏆 '+esc(t.name)+'</div>').join('') +
+      (r.trophies||[]).map((t) => '<div class="label">Trophy: '+esc(t.name)+'</div>').join('') +
       '<div class="row"><button class="primary" id="next">Next</button></div>';
     $('#f').querySelectorAll('button').forEach((b) => b.disabled = true);
     $('#next').onclick = load; $('#next').focus();

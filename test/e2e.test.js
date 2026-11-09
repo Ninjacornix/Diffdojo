@@ -244,3 +244,21 @@ test('badge, export and purge', () => {
   require('../src/data').purge(db, {});
   assert.ok(!fs.existsSync(path.join(home, 'diffdojo.db')));
 });
+
+test('questions are generated while Claude works: an edit starts background generation', () => {
+  const r2 = makeRepo({ 'a.py': 'x = 1\n' });
+  const id = util.repoId(r2);
+  write(r2, 'sched.py', fixture('scheduler.py'));
+  const hook = runHook('on-edit.js', { session_id: 'MID', cwd: r2, tool_name: 'Write', tool_input: { file_path: path.join(r2, 'sched.py') } }, { DIFFDOJO_NO_MIDTURN: '0' });
+  assert.strictEqual(hook.status, 0);
+  assert.ok(hook.ms < 2000, 'the edit hook returns at once');
+  const db = store.open();
+  const until = Date.now() + 120000;
+  const count = () => db.get("SELECT COUNT(*) AS n FROM questions WHERE repo_id = ? AND family != 'questionnaire'", id).n;
+  while (count() === 0 && Date.now() < until) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  assert.ok(count() > 0, 'code/design questions exist before the turn ends');
+  // A second edit right away does not start another run (throttled).
+  const before = fs.readdirSync(path.join(home, id, 'pending')).length;
+  runHook('on-edit.js', { session_id: 'MID', cwd: r2, tool_name: 'Edit', tool_input: { file_path: path.join(r2, 'sched.py') } }, { DIFFDOJO_NO_MIDTURN: '0' });
+  assert.ok(fs.readdirSync(path.join(home, id, 'pending')).length <= before);
+});

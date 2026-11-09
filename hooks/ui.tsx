@@ -58,8 +58,8 @@ async function apply($: Engine, s: Api) {
     const n = s.queued
     await update($, queued, () => n)
     if (s.enabled) {
-      $.ui.status(n > 0 ? `🥋 DiffDojo: ${n} question${n === 1 ? '' : 's'} · /dojo` : undefined)
-      if (lastQueued >= 0 && n > lastQueued) $.ui.toast(`🥋 ${n - lastQueued} new DiffDojo question${n - lastQueued === 1 ? '' : 's'} about Claude's change`)
+      $.ui.status(n > 0 ? `DiffDojo: ${n} question${n === 1 ? '' : 's'} · /dojo` : undefined)
+      if (lastQueued >= 0 && n > lastQueued) $.ui.toast(`DiffDojo: ${n - lastQueued} new DiffDojo question${n - lastQueued === 1 ? '' : 's'} about Claude's change`)
     } else $.ui.status(undefined)
     lastQueued = n
   }
@@ -99,7 +99,7 @@ async function submit($: Engine, q: DojoQuestion, response: string) {
       feedback: r.feedback ?? null,
       trophies: r.trophies ?? [],
     }))
-    for (const t of r.trophies ?? []) $.ui.toast(`🏆 Trophy unlocked: ${t.name}`, { timeoutMs: 8000 })
+    for (const t of r.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 8000 })
   } finally {
     await update($, isBusy, () => false)
   }
@@ -191,7 +191,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
         <Text>
-          <Text bold color="cyan">🥋 DiffDojo</Text>
+          <Text bold color="cyan">DiffDojo</Text>
           <Text dimColor>{` · ${q.family} · ${q.type} · ${q.grading}${q.xp ? ` · ${q.xp} XP` : ''}${q.location ? ` · ${q.location}` : ''}`}</Text>
         </Text>
         <Text wrap="wrap">{q.prompt}</Text>

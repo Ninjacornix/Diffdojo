@@ -21,6 +21,8 @@ Setup
 Practice
   quiz [--topic T] [--family code|design|questionnaire] [--once] [--count N]
                                   Answer queued questions (s skip · z snooze · b bad question · q quit)
+  battle [--snapshot]             Play DiffDojo Battle right here in the terminal (no Claude Code needed)
+  demo [--dir <folder>]           Make a sandbox project with a simulated Claude change, to try everything
   review                          Revisit questions you missed (half XP)
   exam [track]                    Take (or resume) the next belt exam in a track
   boss [track]                    Boss fight: find 2-3 hidden mutations (Blue belt+)
@@ -133,6 +135,27 @@ const commands = {
     console.log(`test command: ${cfg.testCommand || '(none)'} · model path: ${cfg.model.enabled ? 'on' : 'off'} · quiet: ${cfg.quiet}`);
   },
 
+  async demo({ flags }) {
+    const r = await require('./demo').create({ dir: flags.dir });
+    const root = require('path').resolve(__dirname, '..');
+    console.log(`Demo project ready: ${r.dir}`);
+    console.log(`A simulated Claude change to ${r.files} files produced ${r.questions} questions about it.`);
+    console.log('');
+    console.log('Try it without prompting Claude:');
+    console.log(`  1. In this terminal:   cd "${r.dir}" && node "${root}/bin/diffdojo" battle`);
+    console.log(`  2. Inside Claude Code: cd "${r.dir}" && claude --plugin-dir "${root}"`);
+    console.log('                        then type /battle (or /dojo for the plain question view)');
+    console.log(`  3. Plain quiz:         cd "${r.dir}" && node "${root}/bin/diffdojo" quiz`);
+    console.log('');
+    console.log('Professional mode asks about this code first; the other modes mix it with concept questions.');
+  },
+
+  async battle({ flags }) {
+    const term = require('./battle-term');
+    if (flags.snapshot) return console.log(await term.snapshot({ mode: flags.mode || 'easy', width: flags.width ? +flags.width : 72, color: !!flags.color }));
+    await term.play({ width: flags.width ? +flags.width : undefined });
+  },
+
   async quiz({ flags }) {
     const { root, repoId } = repoContext();
     const d = db();
@@ -218,7 +241,7 @@ const commands = {
     }
     const prof = require('./topics').profile(db(), repoId, cfg.pinnedTopics);
     if (!prof.length) console.log('No topics detected yet.');
-    for (const p of prof.slice(0, 20)) console.log(`${p.pinned ? '📌' : '  '} ${p.topic.padEnd(32)} ${p.score.toFixed(1)}`);
+    for (const p of prof.slice(0, 20)) console.log(`${p.pinned ? '*' : ' '} ${p.topic.padEnd(32)} ${p.score.toFixed(1)}`);
     const packs = require('./packs').load();
     const areas = [...new Set(packs.questions.map((q) => q.topic.split('/').slice(0, 2).join('/')))].sort();
     console.log(`\nAvailable quiz topics: ${areas.join(', ')}`);
@@ -288,13 +311,13 @@ const commands = {
     console.log(`Bug confirmed: the test fails on the current code. +${r.xp} XP`);
     console.log(`Report saved: ${r.reportPath}`);
     if (!r.fromClaude) console.log('(Note: this file/line range was not found in a recorded Claude change.)');
-    for (const t of r.trophies) console.log(`🏆 Trophy unlocked: ${t.name}`);
+    for (const t of r.trophies) console.log(`Trophy unlocked: ${t.name}`);
   },
 
   trophy({ pos, flags }) {
     if (pos[1] !== 'claim' || pos[2] !== 'pack-author' || !flags.link) return console.log('Usage: diffdojo trophy claim pack-author --link <merged PR url>');
     const t = require('./rewards').grant(db(), 'pack-author', 'self-reported', flags.link);
-    console.log(t ? `🏆 ${t.name}` : 'Already claimed.');
+    console.log(t ? `Trophy: ${t.name}` : 'Already claimed.');
   },
 
   packs({ pos }) {

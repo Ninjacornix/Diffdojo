@@ -123,6 +123,8 @@ function splitReason(sentence) {
   if (!m) return null;
   let action = sentence.slice(0, m.index).trim().replace(/[,;:—-]+$/, '').trim();
   const reason = sentence.slice(m.index).trim().replace(/[.!]+$/, '');
+  const inFile = /^In ([\w./-]+),?\s+(?:I|we)\s+(.*)$/i.exec(action);
+  if (inFile) action = `${inFile[2]} in ${inFile[1]}`;
   action = action.replace(/^(?:I(?:'ve| have)?|We(?:'ve| have)?|Now I|Then I|Here I)\s+/i, '').replace(/^(?:also|then|now)\s+/i, '');
   if (action.split(/\s+/).length < 3 || reason.split(/\s+/).length < 4) return null;
   return { action, reason };

@@ -14,6 +14,13 @@ function home() {
 
 function normPath(p) {
   let r = path.resolve(p);
+  try {
+    // Resolves symlinks and, on Windows, 8.3 short names (C:\Users\NINJAC~1),
+    // so one project always gets one id however its path was spelled.
+    r = fs.realpathSync.native(r);
+  } catch {
+    /* path does not exist (yet): keep it as resolved */
+  }
   if (process.platform === 'win32') r = r.replace(/\\/g, '/').toLowerCase();
   return r;
 }

@@ -33,9 +33,6 @@ export type DojoResult = {
   trophies: { id: string; name: string }[]
 }
 
-/** One fighter's sprite: two idle frames, each a list of lines. */
-export type Frames = string[][]
-
 /** `diffdojo api battle-state` (src/battle.js view()). */
 export type BattleView = {
   mode: string | null
@@ -46,8 +43,8 @@ export type BattleView = {
   wave: number
   lives: number
   maxLives: number
-  player: { name: string; hp: number; maxHp: number; frames: Frames }
-  enemy: { name: string; level: number; hp: number; maxHp: number; frames: Frames; boss: boolean; color: string | null } | null
+  player: { name: string; hp: number; maxHp: number }
+  enemy: { id: string; name: string; level: number; hp: number; maxHp: number; boss: boolean; color: string | null } | null
   best: Record<string, number>
   wins: Record<string, number>
   hasQuestion: boolean
@@ -101,6 +98,7 @@ declare module 'claude-code' {
       battleResult: Shaped<BattleResult | null>
       battleAnim: Shaped<BattleAnim | null>
       battleTick: number
+      battleIntro: number
       battleBusy: boolean
       current: Shaped<DojoQuestion | null>
       result: Shaped<DojoResult | null>

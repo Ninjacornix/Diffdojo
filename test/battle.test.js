@@ -113,9 +113,49 @@ test('seeded-bug questions become four line choices', () => {
   assert.match(four.choices[four.correctKey], /line 4: total -= x/);
 });
 
-test('every character has two idle frames of equal height', () => {
-  for (const [id, frames] of Object.entries(battle.SPRITES)) {
-    assert.strictEqual(frames.length, 2, id);
-    assert.strictEqual(frames[0].length, frames[1].length, id);
+test('every enemy has pixel art in the scene renderer', async () => {
+  const scene = await import(require('url').pathToFileURL(require('path').join(__dirname, '..', 'hooks', 'scene.mts')).href)
+  for (const ladder of Object.values(battle.LADDERS)) {
+    for (const e of ladder) {
+      for (const f of [0, 1]) {
+        const px = scene.pixels(e.id, f)
+        assert.ok(px.length >= 10, e.id)
+        assert.ok(px.some((r) => r.includes('#')), e.id)
+      }
+    }
   }
+  assert.notDeepStrictEqual(scene.pixels('evil', 0), scene.pixels('evil', 1), 'Evil Claude turns while idle')
+})
+
+test('the terminal game plays a full exchange: intro, question, hit, next enemy', async () => {
+  const term = require('../src/battle-term');
+  const scene = await term.loadScene();
+  battle.start('easy');
+  const G = term.game(scene, { db, repoId: null, root: null, cfg, width: 72, rnd: never });
+  assert.strictEqual(G.g.phase, 'intro');
+  const text = () => G.draw().map((l) => l.map((s) => s.t).join('')).join('\n');
+  assert.match(text(), /TYPO SPRITE wants to fight!/);
+  await G.press('enter'); // skip slide-in
+  await G.press('enter'); // continue
+  assert.strictEqual(G.g.phase, 'question');
+  assert.match(text(), /TYPO SPRITE asks:/);
+  assert.match(text(), /▶ a\)/);
+  G.g.cursor = Object.keys(G.g.question.choices).indexOf(battle.load().pending.correctKey);
+  await G.press('enter');
+  assert.strictEqual(G.g.phase, 'result');
+  for (let i = 0; i < 20; i++) G.step();
+  assert.match(text(), /Correct! You hit TYPO SPRITE/);
+  for (const line of G.draw()) assert.strictEqual(line.reduce((n, s) => n + [...s.t].length, 0), 72, 'every row fills the screen width');
+});
+
+test('the demo makes a sandbox project with questions about a simulated Claude change', async () => {
+  const os = require('os');
+  const path = require('path');
+  const dir = path.join(require('fs').mkdtempSync(path.join(os.tmpdir(), 'dd-demo-')), 'demo');
+  const r = await require('../src/demo').create({ dir });
+  assert.ok(r.questions >= 5, `questions: ${r.questions}`);
+  const kinds = new Set(db.all('SELECT type FROM questions WHERE repo_id = ?', r.repoId).map((x) => x.type));
+  assert.ok(kinds.has('why'), 'why-Claude-did-it from the demo transcript');
+  assert.ok(kinds.has('seeded_bug'));
+  await assert.rejects(require('../src/demo').create({ dir }), /not empty/);
 });

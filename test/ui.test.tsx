@@ -124,11 +124,10 @@ test('skip moves on, and the pane shows the full question', async ($, on) => {
 
 // ---------------- battle mode ----------------
 
-const FRAMES = [['  (o_o)  ', '  /| |\  '], ['  (-_-)  ', '  \| |/  ']]
 const FIGHT = {
   mode: 'easy', modeLabel: 'Easy', phase: 'fight', stage: 0, stages: 3, wave: 1, lives: 3, maxLives: 3,
-  player: { name: 'YOU', hp: 100, maxHp: 100, frames: FRAMES },
-  enemy: { name: 'TYPO SPRITE', level: 3, hp: 60, maxHp: 60, frames: FRAMES, boss: false, color: null },
+  player: { name: 'YOU', hp: 100, maxHp: 100 },
+  enemy: { id: 'typo', name: 'TYPO SPRITE', level: 3, hp: 60, maxHp: 60, boss: false, color: null },
   best: {}, wins: {}, hasQuestion: true,
 }
 const BQ = { id: 11, prompt: 'Which search finds shortest paths in an unweighted graph?', code: null, choices: { a: 'DFS', b: 'BFS', c: 'Topological sort', d: 'Dijkstra with negative weights' }, type: 'pack', family: 'questionnaire', difficulty: 'easy', location: null }
@@ -171,6 +170,9 @@ test('battle: pick a mode, fight with arrows + Enter, see the hit, continue', as
   }
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
   await ui.select({ key: 'mode', value: 'easy' })
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
+  await ui.select({ key: 'intro', value: 'go' }) // skip the slide-in
+  await ui.select({ key: 'intro', value: 'go' }) // continue
   expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'easy')).toBe(true)
   expect(await ui.find({ type: 'Text', text: /TYPO SPRITE asks/ })).toBeTruthy()
   expect(await ui.find({ key: 'q-11' })).toBeTruthy()
@@ -187,6 +189,9 @@ test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
   await ui.select({ key: 'mode', value: 'easy' })
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
+  await ui.select({ key: 'intro', value: 'go' }) // skip the slide-in
+  await ui.select({ key: 'intro', value: 'go' }) // continue
   await ui.select({ key: 'q-11', value: 'a' })
   expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits you for 15/ })).toBeTruthy()
   await ui.unmount()

@@ -97,13 +97,13 @@ function format(s, { color = false } = {}) {
   if (s.projects && s.projects.length) {
     lines.push('');
     lines.push(`Projects tracked: ${s.projects.length}`);
-    for (const p of s.projects.slice(0, 8)) lines.push(`  ${p.enabled ? ' ' : '⏸'} ${require('path').basename(p.path).padEnd(28)} ${String(p.xp).padStart(5)} XP · ${p.answered} answered · ${p.generated} questions`);
+    for (const p of s.projects.slice(0, 8)) lines.push(`  ${p.enabled ? ' ' : '-'} ${require('path').basename(p.path).padEnd(28)} ${String(p.xp).padStart(5)} XP · ${p.answered} answered · ${p.generated} questions`);
   }
   for (const b of s.bugs.slice(0, 5)) lines.push(`  • ${b.title} (${b.file || '?'}) → ${b.report_path}`);
   if (s.trophies.length) {
     lines.push('');
     lines.push('Trophies:');
-    for (const t of s.trophies) lines.push(`  🏆 ${t.name}${t.link ? ` → ${t.link}` : ''}`);
+    for (const t of s.trophies) lines.push(`  * ${t.name}${t.link ? ` → ${t.link}` : ''}`);
   }
   const unl = s.unlocks.filter((u) => u.features.length);
   if (unl.length) {

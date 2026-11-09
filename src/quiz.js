@@ -89,10 +89,10 @@ function renderResult(q, r, { color = false } = {}) {
   if (q.explanation) out.push(c.yellow(q.explanation));
   if (q.evidence && r.correct !== null) out.push(c.dim(`Evidence: ${q.evidence}`));
   if (r.feedback) out.push(c.blue(`Feedback (no XP): ${r.feedback}`));
-  for (const t of r.trophies || []) out.push(c.magenta(`🏆 Trophy unlocked: ${t.name}`));
+  for (const t of r.trophies || []) out.push(c.magenta(`Trophy unlocked: ${t.name}`));
   if (r.examResult && r.examResult.finished_at) {
     out.push(r.examResult.passed
-      ? c.green(c.bold(`🥋 Exam passed (${r.examResult.score}/${r.examResult.total}): ${r.examResult.target_belt} belt in ${TRACK_NAMES[r.examResult.track] || r.examResult.track}!`))
+      ? c.green(c.bold(`Exam passed (${r.examResult.score}/${r.examResult.total}): ${r.examResult.target_belt} belt in ${TRACK_NAMES[r.examResult.track] || r.examResult.track}!`))
       : c.red(`Exam failed (${r.examResult.score}/${r.examResult.total}). Retake in ${rewards.RETAKE_HOURS} h with new questions.`));
   }
   return out.join('\n');
