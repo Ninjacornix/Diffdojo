@@ -19,6 +19,7 @@ const model = require('./model');
 const codeGen = require('./generators/code');
 const design = require('./generators/design');
 const { buildPredict } = require('./generators/predict');
+const { conceptQs } = require('./generators/concepts');
 const { pickPack } = require('./generators/questionnaire');
 const { repoDir, readJson, writeJson, nowIso, log, shuffle, ensureDir } = require('./util');
 
@@ -287,7 +288,7 @@ async function generate(opts) {
       if (!byType.has(q.type)) byType.set(q.type, []);
       byType.get(q.type).push(q);
     }
-    const order = ['why', 'data_structure', 'architecture', 'algorithm', 'complexity', 'why_fits'];
+    const order = ['data_structure', 'algorithm', 'complexity', 'architecture', 'why_fits', 'why'];
     while (created.design.length < want.design && [...byType.values()].some((l) => l.length)) {
       for (const t of order) {
         const l = byType.get(t);
@@ -295,10 +296,13 @@ async function generate(opts) {
       }
     }
     const changedFn = allFunctions.find((f) => f.changed && f.end - f.start >= 4);
-    if (changedFn && created.design.length < want.design + 1) created.design.push(design.critiqueQ(ctx, changedFn));
+    if (changedFn && cfg.critique && created.design.length < want.design + 1) created.design.push(design.critiqueQ(ctx, changedFn));
   }
 
-  // ---- Code challenges
+  // ---- Code challenges: technical questions about what Claude used come first
+  if (want.code > 0 && files.length) {
+    created.code.push(...conceptQs(fileInfos, { max: Math.max(1, want.code - (units.length ? 1 : 0)), rnd }));
+  }
   if (want.code > 0 && units.length) {
     const tryOrder = shuffle(units, rnd);
     // Predict the output (at most one per batch)
@@ -342,9 +346,9 @@ async function generate(opts) {
         break;
       }
     }
-    // Seeded bugs fill the rest
-    for (const u of tryOrder.concat(tryOrder)) {
-      if (created.code.length >= want.code || Date.now() > deadline) break;
+    // At most one "spot the bug" per batch (quiz only; the battle sticks to technical questions)
+    for (const u of tryOrder) {
+      if (created.code.length >= want.code || created.code.some((c) => c.type === 'seeded_bug') || Date.now() > deadline) break;
       const track = lang.trackFor(u.language);
       const q = codeGen.seededBug(ctx, u, {
         categories: rewards.categoriesFor(db, track),
@@ -361,7 +365,8 @@ async function generate(opts) {
   const qCount = (want.questionnaire || 0) + Math.max(0, unfilled);
   if (qCount > 0 && (cfg.families || []).includes('questionnaire')) {
     const prof = topics.profile(db, repoId, cfg.pinnedTopics);
-    created.questionnaire.push(...pickPack(db, { topics: prof, count: qCount, rnd }));
+    const used = new Set(created.code.concat(created.design).map((q) => q.source && q.source.slice(5)).filter(Boolean));
+    created.questionnaire.push(...pickPack(db, { topics: prof, count: qCount, rnd, exclude: used }));
   }
 
   // ---- Store

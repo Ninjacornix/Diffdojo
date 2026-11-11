@@ -102,10 +102,10 @@ test('enable + session start + edits + stop generate questions in the background
     assert.ok(q.code_file, `${q.type} cites a file`);
   }
   for (const q of qs.filter((x) => x.family === 'questionnaire')) assert.ok(q.meta.selectedBy, 'questionnaire shows which topic selected it');
-  const why = qs.find((q) => q.type === 'why');
-  assert.ok(why, 'why question from the transcript');
-  assert.match(why.explanation, /Claude said \(turn 1\)/);
-  assert.ok(db.get('SELECT COUNT(*) AS n FROM rationale').n >= 1);
+  const concept = qs.find((q) => q.type === 'concept');
+  assert.ok(concept, 'a technical question about an API Claude used');
+  assert.match(concept.prompt, /^Claude used `\w+` in sched\.py:\d+\./);
+  assert.ok(db.get('SELECT COUNT(*) AS n FROM rationale').n >= 1, "Claude's reasons are still extracted");
   // A second Stop with no new edits doesn't regenerate code questions.
   const before = db.get('SELECT COUNT(*) AS n FROM questions WHERE family = ?', 'code').n;
   runHook('on-stop.js', { session_id: 'S1', cwd: repo, transcript_path: transcript }, { DIFFDOJO_STOP_INLINE: '1' });
@@ -114,8 +114,11 @@ test('enable + session start + edits + stop generate questions in the background
 
 test('seeded bug answers are graded against the known mutation', async () => {
   const db = store.open();
-  const q = store.hydrate(db.get("SELECT * FROM questions WHERE type = 'seeded_bug' AND repo_id = ? LIMIT 1", repoId));
-  assert.ok(q, 'a seeded bug question exists');
+  // Spot-the-bug is now at most one per batch, so build one from Claude's stored code.
+  const unit = db.get("SELECT * FROM code_units WHERE repo_id = ? AND name = 'inRange'", repoId);
+  const made = require('../src/generators/code').seededBug({ root: repo, cfg: config.load(repoId) }, unit, { rnd: util.rng(3), budget: { testRuns: 0, deadline: 0 } });
+  assert.ok(made, 'a seeded bug question can be built');
+  const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', store.insertQuestion(db, { ...made, repo_id: repoId })));
   assert.ok(q.code.split('\n').length <= 60, 'excerpt capped');
   const wrongLine = q.code.split('\n').length + 5;
   const bad = await grader.answer(db, q, String(wrongLine), { cfg: config.load(repoId), root: repo });

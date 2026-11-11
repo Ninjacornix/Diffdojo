@@ -1,0 +1,6 @@
+name: in-code
+topic: code/concepts
+description: >
+  Technical questions about specific APIs and language constructs. Each lists
+  the code tokens it is `about`; when Claude's change uses one of them,
+  DiffDojo asks the question about that line ("Claude used X here. What does it do?").

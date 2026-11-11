@@ -14,17 +14,17 @@ Everything runs on your machine. No accounts, no servers, nothing uploaded.
 
 ## What kind of questions?
 
-**Code challenges** — built from the code Claude just changed
-- *Spot the bug:* DiffDojo copies one of Claude's functions, quietly breaks one line, and asks you which one.
-- *Predict the output:* what does this function return for this input? (DiffDojo actually runs it to know the answer.)
-- *Write a test:* write a test that would catch a hidden bug in this function.
-
-**Design questions** — about the choices Claude made
-- What data structure did Claude use here? Which file owns this logic now? What calls what?
-- *Why did Claude do this?* — checked against what Claude actually said in your session.
+**Technical questions about Claude's code** — the main course
+- *What is this?* Claude used `std::lock_guard`, `heapq.heappush`, `Promise.all` or `EPOLLET` in its change. What does it do, and why does it matter here?
+- *What does this return?* Predict the output of a function Claude wrote for a given input. (DiffDojo actually runs it to know the answer.)
+- *What is this data structure?* What container did Claude use for this, and what is its complexity?
 
 **Concept quizzes** — on the topics you're working in
-- 200+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
+- 250+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
+
+**Review extras** (in the plain quiz, not in battles)
+- *Spot the bug:* a copy of one of Claude's functions with one line quietly broken, at most one per change.
+- *Write a test* that would catch a hidden bug, and *why did Claude do this?* checked against what Claude said in your session.
 
 Every answer is checked against real evidence — running the code, reading it, or reviewed answer keys — not guesswork.
 

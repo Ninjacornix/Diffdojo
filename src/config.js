@@ -30,7 +30,8 @@ const DEFAULTS = {
   questionsPerTurn: 6,
   sessionCap: 40, // max questions generated per Claude session
   quiet: false, // when true, hooks record but generate nothing until `diffdojo generate`
-  mix: { code: 40, design: 30, questionnaire: 30 },
+  mix: { code: 50, design: 25, questionnaire: 25 },
+  critique: false, // also add an open "do you agree with Claude's design?" question per batch
   families: ['code', 'design', 'questionnaire'],
   testCommand: null, // e.g. "pytest -q" or "npm test" — the only project command ever executed
   testTimeoutSec: 120,

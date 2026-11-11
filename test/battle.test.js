@@ -156,8 +156,10 @@ test('the demo makes a sandbox project with questions about a simulated Claude c
   const r = await require('../src/demo').create({ dir });
   assert.ok(r.questions >= 5, `questions: ${r.questions}`);
   const kinds = new Set(db.all('SELECT type FROM questions WHERE repo_id = ?', r.repoId).map((x) => x.type));
-  assert.ok(kinds.has('why'), 'why-Claude-did-it from the demo transcript');
-  assert.ok(kinds.has('seeded_bug'));
+  assert.ok(kinds.has('concept'), 'technical questions about what Claude used');
+  const concepts = db.all("SELECT prompt FROM questions WHERE repo_id = ? AND type = 'concept'", r.repoId);
+  assert.ok(concepts.length >= 3, `concept questions: ${concepts.length}`);
+  for (const c of concepts) assert.match(c.prompt, /^Claude used `[^`]+` in \w+\.(py|cpp):\d+\. /);
   await assert.rejects(require('../src/demo').create({ dir }), /not empty/);
 });
 
@@ -168,4 +170,32 @@ test('the player is named after the user, in caps', async () => {
   battle.start('easy');
   const r = await hit();
   assert.strictEqual(r.playerName, name);
+});
+
+test('code concepts: technical questions about the APIs Claude used, never on import lines', () => {
+  const { conceptQs } = require('../src/generators/concepts');
+  const src = 'import heapq\nfrom collections import deque\n\nq = deque(maxlen=3)\n# heappush in a comment\nheapq.heappush(jobs, (1, "x"))\n';
+  const qs = conceptQs([{ file: 'jobs.py', lang: 'python', src, added: [1, 2, 3, 4, 5, 6] }], { max: 5, rnd: util.rng(1) });
+  const about = qs.map((q) => q.meta.about).sort();
+  assert.deepStrictEqual(about, ['deque', 'heappush']);
+  for (const q of qs) {
+    assert.strictEqual(q.type, 'concept');
+    assert.strictEqual(q.format, 'multiple_choice');
+    assert.strictEqual(Object.keys(q.choices).length, 4);
+    assert.match(q.prompt, /^Claude used `(deque|heappush)` in jobs\.py:(4|6)\. /);
+  }
+  // Language scoping: a C++ token in a Python file is not matched.
+  assert.strictEqual(conceptQs([{ file: 'a.py', lang: 'python', src: 'x = lock_guard\n', added: [1] }]).length, 0);
+});
+
+test('the battle only serves technical questions from the project queue', () => {
+  const qid = (over) => store.insertQuestion(db, { repo_id: 'tech', family: 'code', format: 'choice', grading: 'verified', xp: 10, prompt: 'p', choices: { a: '1', b: '2', c: '3', d: '4' }, answer: 'a', difficulty: 'hard', ...over });
+  const why = qid({ type: 'why' });
+  const line = qid({ type: 'seeded_bug', format: 'line', code: 'a\nbb\nccc\ndddd\neeeee', answer: { lines: [2] } });
+  const concept = qid({ type: 'concept' });
+  battle.start('professional');
+  const q = battle.nextQuestion(db, { repoId: 'tech', rnd: never });
+  assert.strictEqual(q.question.id, concept);
+  assert.notStrictEqual(q.question.id, why);
+  assert.notStrictEqual(q.question.id, line);
 });

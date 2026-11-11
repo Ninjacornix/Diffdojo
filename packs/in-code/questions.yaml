@@ -1,0 +1,740 @@
+questions:
+  # ---------------------------------------------------------------- C++
+  - id: ic-cpp-lock-guard
+    topic: cpp/concurrency
+    track: concurrency
+    language: cpp
+    about: [lock_guard]
+    difficulty: easy
+    format: multiple_choice
+    question: What does std::lock_guard do?
+    choices:
+      a: Locks a mutex when it is constructed and unlocks it when it goes out of scope
+      b: Checks at compile time that a mutex is never locked twice
+      c: Makes every member function of a class thread-safe
+      d: Locks a mutex only if no other thread is waiting for it
+    answer: a
+    explanation: It is an RAII guard, so the mutex is released on every exit path, including exceptions and early returns.
+
+  - id: ic-cpp-unique-lock
+    topic: cpp/concurrency
+    track: concurrency
+    language: cpp
+    about: [unique_lock]
+    difficulty: medium
+    format: multiple_choice
+    question: What can std::unique_lock do that std::lock_guard cannot?
+    choices:
+      a: Lock several mutexes at once without deadlock
+      b: Be unlocked and relocked before it is destroyed, and be passed to condition_variable::wait
+      c: Make the mutex recursive
+      d: Work without a mutex
+    answer: b
+    explanation: unique_lock is movable and supports deferred locking, unlock()/lock(), and is what condition_variable::wait needs.
+
+  - id: ic-cpp-scoped-lock
+    topic: cpp/concurrency
+    track: concurrency
+    language: cpp
+    about: [scoped_lock]
+    difficulty: medium
+    format: multiple_choice
+    question: What is std::scoped_lock (C++17) for?
+    choices:
+      a: Locking a mutex for exactly one statement
+      b: Locking one or more mutexes at once using a deadlock-avoidance algorithm, released at scope exit
+      c: A lock that can be shared by many readers
+      d: Making a scope run on a single thread
+    answer: b
+    explanation: With several mutexes it locks them all without deadlock, regardless of the order other code uses.
+
+  - id: ic-cpp-condvar
+    topic: cpp/concurrency
+    track: concurrency
+    language: cpp
+    about: [condition_variable]
+    difficulty: medium
+    format: multiple_choice
+    question: What is a std::condition_variable used for?
+    choices:
+      a: Storing a value that several threads can read without locking
+      b: Letting threads sleep until another thread notifies them that a condition may have changed
+      c: Counting how many threads hold a mutex
+      d: Cancelling a running thread
+    answer: b
+    explanation: Waiters block on it with a lock held and re-check their predicate after notify_one/notify_all (or a spurious wakeup).
+
+  - id: ic-cpp-atomic
+    topic: cpp/concurrency/atomics
+    track: concurrency
+    language: cpp
+    about: ['std::atomic', 'atomic<']
+    difficulty: easy
+    format: multiple_choice
+    question: What does wrapping a counter in std::atomic give you?
+    choices:
+      a: Operations on it that never cause a data race, such as fetch_add from many threads
+      b: Automatic locking of every variable the thread touches
+      c: Faster arithmetic than a plain int
+      d: Persistence of the value across program runs
+    answer: a
+    explanation: Each operation on the atomic is indivisible and ordered according to its memory_order (seq_cst by default).
+
+  - id: ic-cpp-move
+    topic: cpp/core/memory
+    track: cpp
+    language: cpp
+    about: ['std::move']
+    difficulty: easy
+    format: multiple_choice
+    question: What does std::move do?
+    choices:
+      a: Copies the object to a new memory location
+      b: Casts its argument to an rvalue reference so the move constructor or move assignment can take its resources
+      c: Deletes the original object
+      d: Moves the object to another thread
+    answer: b
+    explanation: The cast itself moves nothing; the move happens when the rvalue initialises or is assigned to another object.
+
+  - id: ic-cpp-unique-ptr
+    topic: cpp/core/memory
+    track: cpp
+    language: cpp
+    about: [unique_ptr, make_unique]
+    difficulty: easy
+    format: multiple_choice
+    question: What is std::unique_ptr?
+    choices:
+      a: A pointer that many owners can share, freed when the last one goes away
+      b: A smart pointer with sole ownership that deletes its object when it is destroyed and can only be moved
+      c: A pointer that is checked for null on every dereference
+      d: A pointer to a constant object
+    answer: b
+    explanation: It costs nothing over a raw pointer and makes the ownership explicit. std::shared_ptr is the shared one.
+
+  - id: ic-cpp-shared-ptr
+    topic: cpp/core/memory
+    track: cpp
+    language: cpp
+    about: [shared_ptr, make_shared]
+    difficulty: medium
+    format: multiple_choice
+    question: How does std::shared_ptr decide when to delete its object?
+    choices:
+      a: When the scope that created it ends
+      b: A reference count in a control block; the object is deleted when the last shared_ptr to it is destroyed
+      c: A garbage collector runs periodically
+      d: When weak_ptr::lock returns null
+    answer: b
+    explanation: Copies increment the count atomically. Cycles of shared_ptr never reach zero; break them with weak_ptr.
+
+  - id: ic-cpp-priority-queue
+    topic: dsa/heaps
+    track: dsa
+    language: cpp
+    about: [priority_queue]
+    difficulty: medium
+    format: multiple_choice
+    question: What is std::priority_queue, and what does top() return by default?
+    choices:
+      a: A sorted vector; top() returns the smallest element
+      b: A binary heap adapter; top() returns the largest element (std::less), in O(1)
+      c: A linked list; top() returns the oldest element
+      d: A balanced tree; top() returns the median
+    answer: b
+    explanation: push and pop are O(log n). Pass std::greater (or a custom comparator) to make top() the smallest, e.g. the earliest deadline.
+
+  - id: ic-cpp-unordered-map
+    topic: dsa/hashing
+    track: dsa
+    language: cpp
+    about: [unordered_map]
+    difficulty: easy
+    format: multiple_choice
+    question: What is std::unordered_map?
+    choices:
+      a: A balanced binary search tree with keys in sorted order
+      b: A hash table with average O(1) lookup and no ordering of keys
+      c: A vector of key-value pairs searched linearly
+      d: A map that cannot be modified after construction
+    answer: b
+    explanation: std::map is the ordered tree (O(log n)); unordered_map trades ordering for average constant-time access.
+
+  - id: ic-cpp-map
+    topic: dsa/core
+    track: cpp
+    language: cpp
+    about: ['std::map']
+    difficulty: easy
+    format: multiple_choice
+    question: What is std::map under the hood?
+    choices:
+      a: A hash table
+      b: A balanced binary search tree (usually red-black), with keys kept in sorted order and O(log n) operations
+      c: A sorted array with binary search
+      d: A skip list
+    answer: b
+    explanation: That is why it supports ordered iteration and lower_bound/upper_bound queries.
+
+  - id: ic-cpp-reserve
+    topic: cpp/core
+    track: cpp
+    language: cpp
+    about: ['.reserve(']
+    difficulty: medium
+    format: multiple_choice
+    question: What does calling reserve(n) on a std::vector do?
+    choices:
+      a: Adds n default-constructed elements
+      b: Allocates capacity for at least n elements without changing size(), avoiding reallocations while you push_back
+      c: Limits the vector to at most n elements
+      d: Sorts the first n elements
+    answer: b
+    explanation: resize changes the element count; reserve only the capacity.
+
+  - id: ic-cpp-emplace
+    topic: cpp/core
+    track: cpp
+    language: cpp
+    about: [emplace_back]
+    difficulty: medium
+    format: multiple_choice
+    question: How does emplace_back differ from push_back?
+    choices:
+      a: emplace_back inserts at the front
+      b: emplace_back constructs the element in place from its constructor arguments instead of taking an already-built object
+      c: emplace_back never reallocates
+      d: emplace_back is only for pointers
+    answer: b
+    explanation: It forwards its arguments to the element's constructor inside the vector's storage.
+
+  - id: ic-cpp-optional
+    topic: cpp/core
+    track: cpp
+    language: cpp
+    about: ['std::optional']
+    difficulty: easy
+    format: multiple_choice
+    question: What is std::optional<T>?
+    choices:
+      a: A pointer to T that may be null
+      b: A value of type T or nothing, stored inline without heap allocation
+      c: A function parameter that can be left out
+      d: A T that is computed lazily
+    answer: b
+    explanation: Use has_value() or value_or() to read it; it is a clearer return type than sentinel values.
+
+  - id: ic-cpp-string-view
+    topic: cpp/core
+    track: cpp
+    language: cpp
+    about: [string_view]
+    difficulty: medium
+    format: multiple_choice
+    question: What is std::string_view?
+    choices:
+      a: An owning copy of a string
+      b: A non-owning pointer and length referring to characters stored elsewhere
+      c: A read-only std::string that cannot be resized
+      d: A string stored in a memory-mapped file
+    answer: b
+    explanation: It is cheap to pass by value, but the characters it views must outlive it.
+
+  - id: ic-cpp-constexpr
+    topic: cpp/core/templates
+    track: cpp
+    language: cpp
+    about: [constexpr]
+    difficulty: medium
+    format: multiple_choice
+    question: What does constexpr mean on a function or variable?
+    choices:
+      a: It is always evaluated at compile time
+      b: It can be evaluated at compile time when used in a constant expression
+      c: It cannot be modified after construction
+      d: It is inlined into every caller
+    answer: b
+    explanation: A constexpr function can still run at runtime; consteval forces compile-time evaluation.
+
+  - id: ic-cpp-noexcept
+    topic: cpp/core
+    track: cpp
+    language: cpp
+    about: [noexcept]
+    difficulty: medium
+    format: multiple_choice
+    question: What does marking a function noexcept promise?
+    choices:
+      a: It never returns an error code
+      b: It does not throw; if an exception escapes anyway, std::terminate is called
+      c: It runs in constant time
+      d: It catches all exceptions internally
+    answer: b
+    explanation: Containers such as std::vector use it to decide whether moving elements during reallocation is safe.
+
+  - id: ic-cpp-thread-join
+    topic: cpp/concurrency
+    track: concurrency
+    language: cpp
+    about: ['.join()', 'std::thread']
+    difficulty: easy
+    format: multiple_choice
+    question: What does calling join() on a std::thread do?
+    choices:
+      a: Starts the thread
+      b: Blocks the caller until that thread has finished
+      c: Merges two threads into one
+      d: Lets the thread run on after the std::thread object is destroyed
+    answer: b
+    explanation: A std::thread that is still joinable when destroyed calls std::terminate; detach() is the other option.
+
+  # ---------------------------------------------------------------- Python
+  - id: ic-py-heappush
+    topic: dsa/heaps
+    track: dsa
+    language: python
+    about: [heappush, heappop, heapify]
+    difficulty: medium
+    format: multiple_choice
+    question: What does the heapq module do with a plain Python list?
+    choices:
+      a: Keeps it sorted on every insertion, O(n)
+      b: Treats it as a binary min-heap, so heappop returns the smallest item in O(log n)
+      c: Converts it into a balanced tree
+      d: Makes it thread-safe
+    answer: b
+    explanation: heap[0] is always the smallest item; for a max-heap, push negated keys.
+
+  - id: ic-py-deque
+    topic: python/core
+    track: python
+    language: python
+    about: [deque]
+    difficulty: easy
+    format: multiple_choice
+    question: What is collections.deque good at?
+    choices:
+      a: Fast random access by index in the middle
+      b: O(1) appends and pops at both ends, with an optional maxlen that drops the oldest items
+      c: Keeping items sorted
+      d: Storing key-value pairs
+    answer: b
+    explanation: A list's pop(0) is O(n); a deque's popleft is O(1). With maxlen it works as a bounded ring buffer.
+
+  - id: ic-py-defaultdict
+    topic: python/core
+    track: python
+    language: python
+    about: [defaultdict]
+    difficulty: easy
+    format: multiple_choice
+    question: What does collections.defaultdict(list) do when you read a missing key?
+    choices:
+      a: Raises KeyError
+      b: Returns None without inserting anything
+      c: Calls list() to create a value, stores it under the key and returns it
+      d: Returns an empty tuple
+    answer: c
+    explanation: That makes `d[key].append(x)` work without checking whether the key exists first.
+
+  - id: ic-py-counter
+    topic: python/core
+    track: python
+    language: python
+    about: [Counter]
+    difficulty: easy
+    format: multiple_choice
+    question: What is collections.Counter?
+    choices:
+      a: A thread-safe integer
+      b: A dict subclass that counts hashable items, with helpers like most_common()
+      c: A generator that yields 0, 1, 2, ...
+      d: A timer for measuring code
+    answer: b
+    explanation: Missing keys count as 0, and Counters support + and - between them.
+
+  - id: ic-py-lru-cache
+    topic: python/core
+    track: python
+    language: python
+    about: [lru_cache, '@cache']
+    difficulty: medium
+    format: multiple_choice
+    question: What does decorating a function with functools.lru_cache do?
+    choices:
+      a: Runs the function in a background thread
+      b: Remembers results by argument values and returns the cached result for repeated calls, evicting least recently used entries
+      c: Saves results to disk between program runs
+      d: Limits how often the function may be called
+    answer: b
+    explanation: Arguments must be hashable. It is memoisation, the standard trick for recursive DP functions.
+
+  - id: ic-py-gather
+    topic: python/asyncio
+    track: python
+    language: python
+    about: [asyncio.gather, 'gather(']
+    difficulty: medium
+    format: multiple_choice
+    question: By default, what happens with asyncio.gather when one of the awaitables raises?
+    choices:
+      a: The exception is silently dropped and None is returned in its place
+      b: The first exception propagates to the awaiting code; the other awaitables keep running
+      c: All the other awaitables are cancelled and their results discarded
+      d: gather retries the failed awaitable once
+    answer: b
+    explanation: Pass return_exceptions=True to get exceptions back as results instead. Results otherwise come back in argument order.
+
+  - id: ic-py-create-task
+    topic: python/asyncio
+    track: python
+    language: python
+    about: [create_task]
+    difficulty: hard
+    format: multiple_choice
+    question: What does asyncio.create_task(coro) do?
+    choices:
+      a: Runs coro synchronously and returns its result
+      b: Schedules coro to run concurrently on the event loop and returns a Task you can await or cancel
+      c: Creates a new thread for coro
+      d: Wraps coro so it can be called without await
+    answer: b
+    explanation: Keep a reference to the Task; the loop only holds a weak reference to it.
+
+  - id: ic-py-dataclass
+    topic: python/core
+    track: python
+    language: python
+    about: ['@dataclass']
+    difficulty: easy
+    format: multiple_choice
+    question: What does the @dataclass decorator generate?
+    choices:
+      a: Database tables for the class
+      b: __init__, __repr__ and __eq__ from the class's annotated fields
+      c: Getters and setters with type checking at runtime
+      d: A JSON serializer
+    answer: b
+    explanation: Options add ordering (order=True), immutability and hashing (frozen=True), and __slots__ (slots=True).
+
+  - id: ic-py-enumerate
+    topic: python/core
+    track: python
+    language: python
+    about: ['enumerate(']
+    difficulty: easy
+    format: multiple_choice
+    question: What does enumerate(items) yield?
+    choices:
+      a: The items in sorted order
+      b: Pairs of (index, item), starting at 0 unless you pass start=
+      c: Only the indexes
+      d: The number of items
+    answer: b
+    explanation: It replaces the range(len(items)) pattern.
+
+  - id: ic-py-bisect
+    topic: dsa/search
+    track: dsa
+    language: python
+    about: [bisect]
+    difficulty: medium
+    format: multiple_choice
+    question: What does the bisect module do?
+    choices:
+      a: Splits a list into two halves
+      b: Binary searches a sorted list for the position where a value belongs, in O(log n)
+      c: Sorts a list in place
+      d: Finds the median of a list
+    answer: b
+    explanation: insort inserts while keeping the list sorted (the search is O(log n), the insert O(n)).
+
+  - id: ic-py-with-lock
+    topic: python/concurrency
+    track: concurrency
+    language: python
+    about: [threading.Lock, 'Lock()']
+    difficulty: easy
+    format: multiple_choice
+    question: What does `with self.lock:` do with a threading.Lock?
+    choices:
+      a: Locks every attribute of self
+      b: Acquires the lock for the block and always releases it afterwards, even if an exception is raised
+      c: Makes the block run in a new thread
+      d: Prevents the garbage collector from running
+    answer: b
+    explanation: Only one thread at a time runs code guarded by the same lock.
+
+  - id: ic-py-yield
+    topic: python/core
+    track: python
+    language: python
+    about: ['yield ']
+    difficulty: medium
+    format: multiple_choice
+    question: What does using `yield` inside a function make it?
+    choices:
+      a: An async coroutine
+      b: A generator function, which returns an iterator that produces values lazily, one per next()
+      c: A function that can only be called once
+      d: A function that returns a list
+    answer: b
+    explanation: The function body runs until each yield and pauses there, keeping its local state.
+
+  - id: ic-py-sorted-key
+    topic: python/core
+    track: python
+    language: python
+    about: ['key=lambda']
+    difficulty: easy
+    format: multiple_choice
+    question: What does the key= argument of sorted() or list.sort() do?
+    choices:
+      a: Picks which list to sort
+      b: Gives a function whose result is compared instead of the items themselves
+      c: Encrypts the items before sorting
+      d: Sets the number of items to sort
+    answer: b
+    explanation: The sort is stable, so sorting by one key keeps the previous order among equal keys.
+
+  - id: ic-py-dict-get
+    topic: python/core
+    track: python
+    language: python
+    about: ['.get(']
+    difficulty: easy
+    format: multiple_choice
+    question: What does d.get(key, default) do on a dict?
+    choices:
+      a: Raises KeyError when key is missing
+      b: Returns d[key] if present, otherwise default, without modifying the dict
+      c: Inserts default under key and returns it
+      d: Removes key from the dict
+    answer: b
+    explanation: setdefault is the one that inserts; defaultdict does it automatically.
+
+  # ---------------------------------------------------------------- JavaScript / TypeScript
+  - id: ic-js-promise-all
+    topic: javascript/async
+    track: javascript
+    language: javascript
+    about: [Promise.all]
+    difficulty: medium
+    format: multiple_choice
+    question: What does Promise.all([p1, p2]) do?
+    choices:
+      a: Runs the promises one after another
+      b: Waits for all of them and resolves with their results in order, or rejects as soon as any one rejects
+      c: Resolves with whichever promise finishes first
+      d: Ignores rejected promises
+    answer: b
+    explanation: Promise.allSettled waits for all and reports each outcome; Promise.race and Promise.any return the first.
+
+  - id: ic-js-await
+    topic: javascript/async
+    track: javascript
+    language: javascript
+    about: ['await ']
+    difficulty: easy
+    format: multiple_choice
+    question: What does `await` do inside an async function?
+    choices:
+      a: Blocks the whole program until the promise settles
+      b: Pauses this function until the promise settles, letting other work run meanwhile, then gives its value (or throws its error)
+      c: Starts a new thread
+      d: Converts a value into a promise and returns immediately
+    answer: b
+    explanation: The event loop keeps running other tasks while the async function is suspended.
+
+  - id: ic-js-map
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: ['new Map']
+    difficulty: easy
+    format: multiple_choice
+    question: What is a JavaScript Map?
+    choices:
+      a: A function that transforms an array
+      b: A key-value collection that keeps insertion order and allows keys of any type
+      c: A sorted dictionary
+      d: An object that can only hold string keys
+    answer: b
+    explanation: Unlike plain objects, Map has a size property and no inherited keys such as "__proto__".
+
+  - id: ic-js-set
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: ['new Set']
+    difficulty: easy
+    format: multiple_choice
+    question: What is a JavaScript Set used for?
+    choices:
+      a: Storing key-value pairs
+      b: Storing unique values with fast has/add/delete
+      c: Setting object properties
+      d: Scheduling timers
+    answer: b
+    explanation: A common idiom is `[...new Set(items)]` to remove duplicates.
+
+  - id: ic-js-nullish
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: ['??']
+    difficulty: medium
+    format: multiple_choice
+    question: What does `a ?? b` evaluate to?
+    choices:
+      a: b if a is any falsy value (0, '', false, null, undefined)
+      b: b only if a is null or undefined, otherwise a
+      c: true if both are defined
+      d: a converted to a number
+    answer: b
+    explanation: That is the difference from ||, which also replaces 0, '' and false.
+
+  - id: ic-js-optional-chaining
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: ['?.']
+    difficulty: easy
+    format: multiple_choice
+    question: What does `user?.address?.city` do?
+    choices:
+      a: Throws if user is undefined
+      b: Evaluates to undefined instead of throwing when user or address is null or undefined
+      c: Creates the missing objects
+      d: Checks the types at compile time
+    answer: b
+    explanation: Optional chaining short-circuits at the first null or undefined.
+
+  - id: ic-js-reduce
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: ['.reduce(']
+    difficulty: medium
+    format: multiple_choice
+    question: What does array.reduce((acc, x) => acc + x, 0) do?
+    choices:
+      a: Removes elements from the array
+      b: Folds the array into one value by calling the function on an accumulator and each element in turn
+      c: Sorts the array in descending order
+      d: Returns a new array of the same length
+    answer: b
+    explanation: Without the initial value, the first element becomes the accumulator (and an empty array throws).
+
+  - id: ic-js-json-parse
+    topic: javascript/core
+    track: javascript
+    language: javascript
+    about: [JSON.parse]
+    difficulty: easy
+    format: multiple_choice
+    question: What does JSON.parse do with invalid input?
+    choices:
+      a: Returns null
+      b: Throws a SyntaxError
+      c: Returns the input string unchanged
+      d: Returns an empty object
+    answer: b
+    explanation: Wrap it in try/catch when the text comes from outside the program.
+
+  - id: ic-js-abort
+    topic: javascript/async
+    track: javascript
+    language: javascript
+    about: [AbortController]
+    difficulty: hard
+    format: multiple_choice
+    question: What is an AbortController for?
+    choices:
+      a: Stopping the Node.js process
+      b: Cancelling asynchronous work such as fetch by passing its signal and calling abort()
+      c: Catching unhandled promise rejections
+      d: Limiting how many requests run at once
+    answer: b
+    explanation: The signal is passed to the API; abort() makes it reject with an AbortError.
+
+  # ---------------------------------------------------------------- networking
+  - id: ic-net-epollet
+    topic: networking/epoll
+    track: networking
+    language: cpp
+    about: [EPOLLET]
+    difficulty: hard
+    format: multiple_choice
+    question: What does registering a socket with EPOLLET change?
+    choices:
+      a: epoll reports it only when its state changes, so you must read until EAGAIN or you may never be woken again
+      b: epoll reports errors as well as reads
+      c: The socket becomes blocking
+      d: epoll stops reporting it after one event until re-armed
+    answer: a
+    explanation: That is edge-triggered mode. EPOLLONESHOT is the one that disarms after one event.
+
+  - id: ic-net-epoll-wait
+    topic: networking/epoll
+    track: networking
+    language: cpp
+    about: [epoll_wait]
+    difficulty: medium
+    format: multiple_choice
+    question: What does epoll_wait return?
+    choices:
+      a: The number of sockets registered
+      b: The number of ready file descriptors written into the events array (0 on timeout, -1 on error)
+      c: The total bytes available to read
+      d: The file descriptor of the next connection
+    answer: b
+    explanation: Each returned epoll_event says which fd is ready and for what (EPOLLIN, EPOLLOUT, ...).
+
+  - id: ic-net-nonblock
+    topic: networking/nonblocking
+    track: networking
+    language: cpp
+    about: [O_NONBLOCK]
+    difficulty: medium
+    format: multiple_choice
+    question: What happens when you set O_NONBLOCK on a socket?
+    choices:
+      a: Reads and writes that would wait return immediately with EAGAIN/EWOULDBLOCK instead
+      b: The socket can never block the connect call
+      c: All data is sent without buffering
+      d: The kernel closes idle connections
+    answer: a
+    explanation: Event loops rely on it so one slow peer cannot stall the whole thread.
+
+  - id: ic-net-reuseaddr
+    topic: networking/tcp
+    track: networking
+    language: cpp
+    about: [SO_REUSEADDR]
+    difficulty: medium
+    format: multiple_choice
+    question: Why do servers set SO_REUSEADDR before bind()?
+    choices:
+      a: To share one socket between processes
+      b: To bind the port again right after a restart even while old connections sit in TIME_WAIT
+      c: To accept connections from any IP address
+      d: To enable keepalive
+    answer: b
+    explanation: Without it bind() can fail with EADDRINUSE for a minute or two after the server stops.
+
+  - id: ic-net-nodelay
+    topic: networking/tcp
+    track: networking
+    language: cpp
+    about: [TCP_NODELAY]
+    difficulty: medium
+    format: multiple_choice
+    question: Which kind of traffic benefits most from setting TCP_NODELAY?
+    choices:
+      a: Large bulk file transfers
+      b: Small, latency-sensitive request/response messages, which Nagle's algorithm would otherwise hold back
+      c: UDP broadcast packets
+      d: Connections over the loopback interface only
+    answer: b
+    explanation: It disables Nagle's algorithm, so small writes go out at once; bulk transfers gain nothing and send more small packets.

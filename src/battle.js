@@ -157,6 +157,11 @@ function quit() {
 
 const KEYS = ['a', 'b', 'c', 'd'];
 
+// The battle asks technical questions only: what Claude's code uses and what it
+// is (code concepts, data structures, algorithms, complexity) and concept quizzes;
+// never "which line changed" or "why did Claude...".
+const BATTLE_TYPES = ['concept', 'data_structure', 'algorithm', 'complexity', 'pack'];
+
 /** Turn a stored question into a 4-answer battle question, or null. */
 function toFour(q, rnd = Math.random) {
   if ((q.format === 'choice' || q.format === 'multiple_choice') && q.choices && Object.keys(q.choices).length >= 4) {
@@ -201,7 +206,8 @@ function nextQuestion(db, { repoId, rnd = Math.random } = {}) {
   let picked = null;
   if (repoId) {
     const rows = db.all(
-      `SELECT * FROM questions WHERE status = 'queued' AND repo_id = ? AND format IN ('choice','multiple_choice','line') ORDER BY batch DESC, id ASC LIMIT 40`, repoId,
+      `SELECT * FROM questions WHERE status = 'queued' AND repo_id = ? AND format IN ('choice','multiple_choice')
+         AND type IN (${BATTLE_TYPES.map(() => '?').join(',')}) ORDER BY batch DESC, id ASC LIMIT 40`, repoId, ...BATTLE_TYPES,
     ).map(store.hydrate);
     const fit = rows.filter((q) => preferCode || diffs.includes(q.difficulty));
     for (const q of fit) {

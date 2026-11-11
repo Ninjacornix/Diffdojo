@@ -26,6 +26,7 @@ function validate(q) {
   if (q.references != null && !(Array.isArray(q.references) && q.references.every(isStr))) errs.push('references must be a list of strings');
   if (q.code != null && typeof q.code !== 'string') errs.push('code must be a string');
   if (q.language != null && !LANGS.includes(q.language)) errs.push(`language must be one of ${LANGS.join(', ')}`);
+  if (q.about != null && !(Array.isArray(q.about) && q.about.length && q.about.every((t) => isStr(t)))) errs.push('about must be a list of code tokens');
   const keysOk = (m) => m && typeof m === 'object' && !Array.isArray(m) && Object.keys(m).length >= 2 && Object.values(m).every((v) => v != null && String(v).trim() !== '');
   switch (q.format) {
     case 'multiple_choice':

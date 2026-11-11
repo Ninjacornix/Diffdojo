@@ -21,12 +21,12 @@ const view = {
 }
 const field = scene.battlefield({ view, width: W, tick: 0, intro: scene.INTRO_STEPS, anim: null, enemyHp: 108, playerHp: 70 })
 const rows = [
-  ...scene.wrap(['EVIL CLAUDE asks: One line was changed in this copy of `drain()` from src/net/retry_queue.cpp:27-36. Pick the changed line.'], W - 6).map(text => ({ text })),
-  { text: 'Code challenge · medium · src/net/retry_queue.cpp:27-36', dim: true },
-  { text: 'a) line 4: while (!pending_.empty() || top().deadline <= now) {', selected: true },
-  { text: 'b) line 6:     pending_.pop();' },
-  { text: 'c) line 2: std::lock_guard<std::mutex> guard(mu_);' },
-  { text: 'd) line 7:     n++;' },
+  ...scene.wrap(['EVIL CLAUDE asks: Claude used `std::lock_guard` in src/net/retry_queue.cpp:18. What does std::lock_guard do?'], W - 6).map(text => ({ text })),
+  { text: 'Code concept · easy · src/net/retry_queue.cpp:16-20', dim: true },
+  { text: 'a) Locks a mutex on construction, unlocks it when it leaves scope', selected: true },
+  { text: 'b) Checks at compile time that a mutex is never locked twice' },
+  { text: 'c) Makes every member function of a class thread-safe' },
+  { text: 'd) Locks a mutex only if no other thread is waiting for it' },
 ]
 const lines = field.concat(scene.box(rows, W, 0, false))
 
