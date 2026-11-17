@@ -364,6 +364,8 @@ const commands = {
     const { root, repoId } = repoContext();
     const enabled = !!(repoId && util.isEnabled(repoId));
     const sub = pos[1] || 'status';
+    // Inside DiffDojo's own `claude -p` (writing questions), the plugin's UI must do nothing.
+    if (process.env.DIFFDOJO_CHILD === '1') return out({ enabled: false, battleAllowed: false, battle: false, noMercy: false, queued: 0, question: null, skip: 'DiffDojo child session' });
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
@@ -377,7 +379,17 @@ const commands = {
       const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
       return { enabled, battleAllowed, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
     };
-    if (sub === 'status') return out({ ...status(), battle: config.load(repoId).battle, noMercy: !!config.load(repoId).noMercy });
+    if (sub === 'status') {
+      const cfg = config.load(repoId);
+      // Told once: Claude writes questions from code excerpts (model path, on by default).
+      const noticeFile = path.join(util.home(), 'model-notice.json');
+      const modelNotice = !!(cfg.model && cfg.model.enabled && enabled && !fs.existsSync(noticeFile));
+      return out({ ...status(), battle: cfg.battle, noMercy: !!cfg.noMercy, modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
+    }
+    if (sub === 'model-notice-ack') {
+      util.writeJson(path.join(util.home(), 'model-notice.json'), { at: util.nowIso() });
+      return out({ ok: true });
+    }
     if (sub === 'gate') {
       // No Mercy: a question about the edit in the tool call on stdin.
       const cfg = config.load(repoId);

@@ -67,7 +67,7 @@ All phases can be completed by one developer with no outside approval.
 | P1 | Predict-output validator | Non-deterministic snippets are rejected |
 | P1 | Killing-test grader | Correctly classifies pass/fail on original and mutant |
 | P2 | Rationale extractor | Parses pinned transcript version; fails safe on unknown formats |
-| P2 | Model path | Off by default, rate-limited, schema-validated output |
+| P2 | Model path | On by default (cheap model), one-time notice, rate-limited, schema-validated output, blind-checked |
 | P2 | Web UI | Localhost only, token-protected |
 
 ## Not planned

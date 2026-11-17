@@ -1,5 +1,5 @@
 'use strict';
-// Optional model path (off by default). Two providers:
+// Model path (on by default; model.enabled false turns it off). Two providers:
 //   claude-cli — `claude -p` headless mode on the user's own Claude plan
 //   api        — the official Anthropic SDK (@anthropic-ai/sdk, optional dependency)
 // Every call: runs with DIFFDOJO_CHILD=1 (hook recursion guard), is counted
@@ -8,6 +8,7 @@
 // the answer key for verified questions; model-answered questions are blind
 // checked by a second call and kept only if both agree.
 
+const { spawnSync } = require('child_process');
 const { run, which, log } = require('./util');
 const { hasSecret } = require('./secrets');
 
@@ -26,6 +27,36 @@ const MC_SCHEMA = {
     answer: { type: 'string', enum: ['a', 'b', 'c', 'd'] },
     explanation: { type: 'string' },
   },
+};
+
+const MC_ITEM = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['question', 'file', 'line_start', 'line_end', 'choices', 'answer', 'explanation', 'difficulty'],
+  properties: {
+    question: { type: 'string' },
+    file: { type: 'string' },
+    line_start: { type: 'integer' },
+    line_end: { type: 'integer' },
+    choices: MC_SCHEMA.properties.choices,
+    answer: { type: 'string', enum: ['a', 'b', 'c', 'd'] },
+    explanation: { type: 'string' },
+    difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+  },
+};
+
+const PROJECT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['questions'],
+  properties: { questions: { type: 'array', items: MC_ITEM, maxItems: 6 } },
+};
+
+const BLIND_MANY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['answers'],
+  properties: { answers: { type: 'array', items: { type: 'string', enum: ['a', 'b', 'c', 'd'] }, maxItems: 6 } },
 };
 
 const BLIND_SCHEMA = {
@@ -55,6 +86,11 @@ function validate(obj, schema) {
     if (schema.additionalProperties === false) for (const k of Object.keys(obj)) if (!(k in schema.properties)) return false;
     return Object.entries(schema.properties || {}).every(([k, s]) => !(k in obj) || validate(obj[k], s));
   }
+  if (schema.type === 'array') {
+    if (!Array.isArray(obj) || (schema.maxItems && obj.length > schema.maxItems)) return false;
+    return obj.every((x) => validate(x, schema.items));
+  }
+  if (schema.type === 'integer') return Number.isInteger(obj);
   if (schema.type === 'string') {
     if (typeof obj !== 'string' || !obj.trim() || obj.length > 2000) return false;
     return !schema.enum || schema.enum.includes(obj);
@@ -82,7 +118,7 @@ function recentCalls(db) {
 function available(db, cfg) {
   const m = cfg.model || {};
   if (!m.enabled) return { ok: false, reason: 'model path is off (diffdojo config model.enabled true to turn it on)' };
-  if (recentCalls(db) >= (m.perHour || 6)) return { ok: false, reason: `hourly model limit reached (${m.perHour})` };
+  if (recentCalls(db) >= (m.perHour || 30)) return { ok: false, reason: `hourly model limit reached (${m.perHour})` };
   if (m.provider === 'api') {
     try {
       require.resolve('@anthropic-ai/sdk');
@@ -93,29 +129,56 @@ function available(db, cfg) {
   return { ok: true };
 }
 
+/** The schema as structured outputs takes it: size limits are checked locally by validate() instead. */
+function apiSchema(schema) {
+  if (Array.isArray(schema)) return schema.map(apiSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const out = {};
+  for (const [k, v] of Object.entries(schema)) if (k !== 'maxItems') out[k] = apiSchema(v);
+  return out;
+}
+
 async function callApi(cfg, prompt, schema) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new (Anthropic.default || Anthropic)();
   const response = await client.messages.create({
-    model: cfg.model.model || 'claude-opus-5-5',
-    max_tokens: 4000,
+    model: cfg.model.model || 'claude-haiku-5-5', // cheap by default: questions don't need a big model
+    max_tokens: 16000,
     system: SYSTEM,
     messages: [{ role: 'user', content: prompt }],
-    output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: apiSchema(schema) } },
   });
   if (response.stop_reason === 'refusal') return null;
   const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   return extractJson(text);
 }
 
+/**
+ * Run the claude CLI. On Windows an npm install is a .cmd shim, which Node can
+ * only start through cmd.exe; the prompt goes over stdin, so the command line
+ * holds only fixed flags.
+ */
+function claudeRun(args, input) {
+  const bin = which('claude') || 'claude';
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
+    const line = [`"${bin}"`, ...args.map((a) => (a === '' ? '""' : /^[\w.:=-]+$/.test(a) ? a : `"${a}"`))].join(' ');
+    const r = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], {
+      input, encoding: 'utf8', timeout: 90000, windowsHide: true, windowsVerbatimArguments: true,
+      env: { ...process.env, DIFFDOJO_CHILD: '1' }, maxBuffer: 32 * 1024 * 1024,
+    });
+    return { code: r.status === null ? -1 : r.status, stdout: r.stdout || '', stderr: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
+  }
+  return run(bin, args, { input, timeout: 90000 });
+}
+
 function callCli(cfg, prompt, schema) {
   const full = `${SYSTEM}\n\nJSON schema for your reply:\n${JSON.stringify(schema)}\n\n${prompt}`;
   const args = ['-p', '--output-format', 'json', '--max-turns', '1', '--tools', ''];
   if (cfg.model.model) args.push('--model', cfg.model.model);
-  let r = run('claude', args, { input: full, timeout: 180000 });
+  let r = claudeRun(args, full);
   if (r.code !== 0 && /tools/.test(r.stderr)) {
     // Older CLIs don't know --tools; retry without it.
-    r = run('claude', args.filter((a, i) => !(a === '--tools' || args[i - 1] === '--tools')), { input: full, timeout: 180000 });
+    r = claudeRun(args.filter((a, i) => !(a === '--tools' || args[i - 1] === '--tools')), full);
   }
   if (r.code !== 0) throw new Error(`claude -p failed: ${r.stderr.slice(0, 300)}`);
   const env = extractJson(r.stdout);
@@ -177,6 +240,42 @@ async function algoQuestion(db, cfg, { kind, name, code, file }) {
   return ok ? q : null;
 }
 
+/**
+ * Technical questions about the change and the project, written by a cheap
+ * model (Haiku by default) in one call, then answered blind by a second call;
+ * only questions both calls agree on are kept.
+ * @param hunks [{file, lang, start, end, code}] changed code with a little context
+ * @param project {files: string[], topics: string[]}
+ */
+async function projectQuestions(db, cfg, { hunks, project, count = 3 }) {
+  const body = hunks.map((h) => fence('CODE', `${h.file} (lines ${h.start}-${h.end}, ${h.lang})\n${h.code}`)).join('\n');
+  const prompt = [
+    `Claude (a coding agent) just changed this project. Write ${count} multiple-choice questions that check whether the developer`,
+    'really understands the change: technical questions about this code in this project. Good subjects: what a specific line or',
+    'expression does, why a data structure, API or library call fits here, what happens on an edge case (empty input, a failure,',
+    'concurrency), complexity, and how the change interacts with the rest of the project.',
+    'Rules: each question is answerable from the code shown; exactly one option is correct; the three wrong options are plausible',
+    'to someone who skimmed the code; options are short (under 90 characters) and distinct; vary the position of the correct option;',
+    'no trivia about names or formatting; `file`, `line_start` and `line_end` point at the lines the question is about.',
+    project.topics && project.topics.length ? `Project topics: ${project.topics.slice(0, 8).join(', ')}.` : '',
+    project.files && project.files.length ? fence('TEXT', `Project files:\n${project.files.slice(0, 60).join('\n')}`) : '',
+    body,
+  ].filter(Boolean).join('\n');
+  const out = await call(db, cfg, 'project', prompt, PROJECT_SCHEMA);
+  if (!out || !out.questions.length) return [];
+  const qs = out.questions.filter((q) => new Set(Object.values(q.choices).map((c) => c.trim().toLowerCase())).size === 4);
+  if (!qs.length) return [];
+  // Blind check: a second call answers every question without the key.
+  const blindPrompt = [
+    'Answer each multiple-choice question about this code. Reply {"answers": ["<letter>", ...]} in question order.',
+    body,
+    ...qs.map((q, i) => `Question ${i + 1}: ${q.question}\n${Object.entries(q.choices).map(([k, v]) => `${k}) ${v}`).join('\n')}`),
+  ].join('\n\n');
+  const blind = await call(db, cfg, 'project-blind', blindPrompt, BLIND_MANY_SCHEMA);
+  if (!blind) return [];
+  return qs.filter((q, i) => blind.answers[i] === q.answer);
+}
+
 /** Feedback-only review of a free-text answer (0 XP). */
 async function feedback(db, cfg, { question, code, answer }) {
   const prompt = `A developer answered an open review question about some code. Give 2-4 sentences of specific, honest feedback: what is right, what is missing or wrong. Reply {"feedback": "..."}.\nQuestion: ${question}\n${code ? fence('CODE', code) : ''}\n${fence('TEXT', `Answer: ${answer}`)}`;
@@ -184,4 +283,4 @@ async function feedback(db, cfg, { question, code, answer }) {
   return r ? r.feedback : null;
 }
 
-module.exports = { available, call, whyQuestion, algoQuestion, feedback, validate, extractJson, MC_SCHEMA };
+module.exports = { available, call, projectQuestions, claudeRun, whyQuestion, algoQuestion, feedback, validate, extractJson, MC_SCHEMA };

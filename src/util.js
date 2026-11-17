@@ -177,7 +177,8 @@ function which(bin) {
   const exts = process.platform === 'win32' ? (process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';') : [''];
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
-    for (const ext of ['', ...exts]) {
+    // On Windows a file without an extension can't be run: try PATHEXT first.
+    for (const ext of process.platform === 'win32' ? [...exts, ''] : ['']) {
       const p = path.join(dir, bin + ext);
       try {
         if (fs.statSync(p).isFile()) return p;

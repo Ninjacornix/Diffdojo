@@ -66,6 +66,17 @@ async function apply($: Engine, s: Api) {
   }
 }
 
+/** Once: say that Claude writes the questions, from code excerpts, and how to keep a project local. */
+async function modelNotice($: Engine) {
+  const s = (await api($, ['status'])) as Api & { modelNotice?: boolean; model?: string | null }
+  if (!s.modelNotice) return
+  $.ui.log(
+    `DiffDojo: Claude (${s.model || 'a small model'}, on your own plan) writes technical questions about each change in the background, ` +
+      'from short excerpts of the changed code. To keep a project fully local: diffdojo config set model.enabled false (add --global for every project).',
+  )
+  await api($, ['model-notice-ack'])
+}
+
 async function refresh($: Engine) {
   const s = await api($, ['next'])
   if (s.error) return
@@ -121,6 +132,7 @@ export const register: Register = on => {
     await battleSessionStart($)
     await noMercySessionStart($)
     void refresh($)
+    void modelNotice($)
     return started
   })
 

@@ -8,13 +8,16 @@ When Claude Code is busy working on your project, you're usually just waiting. D
 
 > DiffDojo is an independent, open-source plugin for Claude Code. It is not affiliated with or endorsed by Anthropic.
 
-Everything runs on your machine. No accounts, no servers, nothing uploaded.
+No accounts, no servers. Your progress stays on your machine; the only thing that leaves it is short excerpts of Claude's changes, sent to Claude on your own plan so it can write questions about them (one setting turns that off).
 
 ---
 
 ## What kind of questions?
 
-**Technical questions about Claude's code** — the main course
+**Claude's questions about your project** — the main course
+- After each change, Claude itself writes technical questions about **that change in your project**: why a heap and not a list here, what `due(5)` returns when two jobs tie, what happens to `recent` after 12 jobs. A cheap model (Claude Haiku) writes them in the background on your own plan, so your main conversation never sees them and Claude's work isn't slowed down. A second, blind call answers each one, and only questions both calls agree on are kept.
+
+**Technical questions DiffDojo builds itself** — checked by running or reading the code
 - *What is this?* Claude used `std::lock_guard`, `heapq.heappush`, `Promise.all` or `EPOLLET` in its change. What does it do, and why does it matter here?
 - *What does this return?* Predict the output of a function Claude wrote for a given input. (DiffDojo actually runs it to know the answer.)
 - *What is this data structure?* What container did Claude use for this, and what is its complexity?
@@ -26,7 +29,7 @@ Everything runs on your machine. No accounts, no servers, nothing uploaded.
 - *Spot the bug:* a copy of one of Claude's functions with one line quietly broken, at most one per change.
 - *Write a test* that would catch a hidden bug, and *why did Claude do this?* checked against what Claude said in your session.
 
-Every answer is checked against real evidence — running the code, reading it, or reviewed answer keys — not guesswork.
+DiffDojo's own questions are checked against real evidence: running the code, reading it, or reviewed answer keys. Claude's questions are double-checked by a blind second answer; they earn a bit less XP and never decide a belt exam.
 
 ## Battle mode
 
@@ -174,14 +177,21 @@ Run `diffdojo help` for everything else.
 ## Your data stays yours
 
 - **Your choice where it runs.** It's on in every project folder by default, git or not; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
-- **Local only.** Everything is stored in `~/.diffdojo/` — never in your repo, never uploaded.
+- **Stored locally.** Your progress and questions live in `~/.diffdojo/`, never in your repo, never on a server.
 - **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
-- **Never talks to Claude.** Nothing is ever injected into your conversation.
+- **Stays out of your conversation.** Nothing is ever injected into your chat with Claude; questions are written by a separate background call.
 - **Safe with your code.** Code only ever runs in a temporary copy, and the only project command DiffDojo will run is the test command you gave it. Files like `.env` and keys are skipped, and anything that looks like a secret is filtered out.
 - **Claude's code runs boxed in.** To check "what does this return?" answers, DiffDojo runs functions from Claude's change. On Linux (with bubblewrap) and macOS that happens in a sandbox with no network that can't write to your files; on Windows there's no sandbox, only a timeout and an environment stripped of API keys and tokens. Run `diffdojo config set snippetSandbox require --global` to skip those questions where no sandbox is available. Details in [Privacy & security](docs/PRIVACY_AND_SECURITY.md#execution-safety).
 - **You're in control.** `diffdojo export` gives you all your data as one file; `diffdojo purge --yes` deletes it.
 
-**Optional AI-written questions:** DiffDojo can use your own Claude plan to write extra questions (`diffdojo config set model.enabled true`). This is **off by default**. When on, small code excerpts are sent to Claude under your account's normal terms — keep it off for confidential code.
+**Claude writes the questions (on by default):** after each change, DiffDojo runs `claude -p` on your own Claude plan with a cheap model (`claude-haiku-5-5`) and short excerpts of the changed code (at most ~160 lines, never files matching the deny list, never anything that looks like a secret). That's at most 30 small calls an hour. The excerpts are handled like any other Claude Code request under your account's terms. **For confidential code, turn it off:**
+
+```bash
+diffdojo config set model.enabled false            # this project
+diffdojo config set model.enabled false --global   # every project
+```
+
+With it off, everything stays on your machine and you get DiffDojo's own questions only. `diffdojo config set model.model claude-sonnet-5-5` picks a different model.
 
 ---
 

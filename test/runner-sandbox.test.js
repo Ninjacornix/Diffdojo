@@ -13,7 +13,7 @@ const ROOT = path.join(__dirname, '..');
 /** Runs a JS snippet through runSnippet in a fresh process (sandboxKind is cached per process). */
 function snippet(code, { sandbox, policy, env = {} } = {}) {
   const home = isolate();
-  if (policy) fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ snippetSandbox: policy }));
+  if (policy) fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ snippetSandbox: policy, model: { enabled: false } }));
   const driver = `const r = require(${JSON.stringify(path.join(ROOT, 'src', 'runner'))}).runSnippet(${JSON.stringify(code)}, 'javascript'); process.stdout.write(JSON.stringify(r));`;
   const r = spawnSync(process.execPath, ['-e', driver], {
     encoding: 'utf8',

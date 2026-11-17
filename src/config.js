@@ -49,11 +49,14 @@ const DEFAULTS = {
   snoozeMinutes: 60,
   whyQuestions: true, // read Claude's stated reasoning from the local transcript
   pinnedTopics: [],
+  // Claude writes technical questions about each change and the project, in the
+  // background with `claude -p` on your own plan, using a cheap model. Code
+  // excerpts are sent to Claude: set model.enabled false for confidential code.
   model: {
-    enabled: false,
+    enabled: true,
     provider: 'claude-cli', // 'claude-cli' (claude -p) or 'api' (ANTHROPIC_API_KEY)
     model: 'claude-haiku-5-5',
-    perHour: 6,
+    perHour: 30, // model calls per hour; a batch of project questions is 2 (write + blind check)
     showExcerpts: true,
   },
   theme: 'auto',

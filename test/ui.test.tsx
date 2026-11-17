@@ -368,3 +368,26 @@ test('no mercy: /nomercy toggles the mode', async ($, on) => {
   expect(String(r.text)).toContain('SKYNET')
   expect(calls.some(c => c.join(' ').includes('config set noMercy true --global') || (c[0] === 'config' && c[2] === 'noMercy'))).toBe(true)
 })
+
+// ---------------- Claude writes the questions ----------------
+
+test('the first session says once that Claude writes the questions, and how to keep a project local', async ($, on) => {
+  const calls: string[][] = []
+  const logs: string[] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', battle: false, noMercy: false }
+    if (args[0] === 'status') body = { ...body, modelNotice: !calls.some(c => c[0] === 'model-notice-ack'), model: 'claude-haiku-5-5' }
+    if (args[0] === 'battle-state') body = { ...body, state: { phase: 'menu', mode: null } }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  on('ui.log', (_: unknown, e: any) => {
+    logs.push(String(e.text ?? ''))
+    return { value: undefined }
+  })
+  await boot($, on)
+  expect(logs.some(l => l.includes('claude-haiku-5-5') && l.includes('model.enabled false'))).toBe(true)
+  expect(calls.some(c => c[0] === 'model-notice-ack')).toBe(true)
+})
