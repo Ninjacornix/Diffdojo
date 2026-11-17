@@ -64,10 +64,10 @@ const BAND = (surface: 'terminal' | 'desktop', isWorking: boolean) =>
   }) as const
 
 /** Starts a session; `toasts` collects what the plugin toasted. Settles the start's background sync. */
-async function boot($: any, on: any, toasts: string[] = []) {
+async function boot($: any, on: any, toasts: string[] = [], { placed = true } = {}) {
   const clock = mock.clock(on)
   on('command.register', () => ({ value: { command: 'dojo' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', () => ({ value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'test: no pane' } }))
   on('ui.close', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', (_: unknown, e: any) => {
@@ -340,10 +340,10 @@ function person(on: any, label: string | null) {
 
 const EDIT = { tool: 'Edit', file_path: '/p/sched.py', old_string: 'x = 1', new_string: 'x = 2' }
 
-test('no mercy: during a SKYNET fight a right answer lets the edit through', async ($, on) => {
+test('no mercy (dialog fallback): a right answer lets the edit through', async ($, on) => {
   const calls = fakeGate(on)
   const seen = person(on, 'heap')
-  await boot($, on)
+  await boot($, on, [], { placed: false })
   const r: any = await $.tool.call(EDIT as any)
   expect(seen.asked[0]).toContain('What is `jobs`?')
   expect(seen.asked[0]).toContain('heapq.heappush')
@@ -353,10 +353,10 @@ test('no mercy: during a SKYNET fight a right answer lets the edit through', asy
   expect(r.deny).toBeUndefined()
 })
 
-test('no mercy: one wrong answer rejects the edit, tells Claude to stop and ends the fight', async ($, on) => {
+test('no mercy (dialog fallback): one wrong answer rejects the edit, tells Claude to stop and ends the fight', async ($, on) => {
   fakeGate(on)
   const seen = person(on, 'dict')
-  await boot($, on)
+  await boot($, on, [], { placed: false })
   const r: any = await $.tool.call(EDIT as any)
   expect(seen.applied).toBe(false)
   expect(String(r.deny ?? r.text)).toContain('Stop working')
@@ -367,10 +367,10 @@ test('no mercy: one wrong answer rejects the edit, tells Claude to stop and ends
   expect(seen.applied).toBe(true)
 })
 
-test('no mercy: closing the question counts as wrong', async ($, on) => {
+test('no mercy (dialog fallback): skipping the question counts as wrong', async ($, on) => {
   fakeGate(on)
   const seen = person(on, null)
-  await boot($, on)
+  await boot($, on, [], { placed: false })
   const r: any = await $.tool.call(EDIT as any)
   expect(seen.applied).toBe(false)
   expect(String(r.deny ?? r.text)).toContain('rejected')
@@ -395,23 +395,70 @@ test('no mercy: an edit DiffDojo has no question for goes through', async ($, on
   expect(seen.applied).toBe(true)
 })
 
+/** Starts an edit, answers SKYNET's question in the battle pane with `label`, and returns the edit's result. */
+async function answerInPane($: any, label: string) {
+  const call = $.tool.call(EDIT as any)
+  const pane = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  let found: any = null
+  for (let i = 0; i < 50 && !found; i++) {
+    found = await pane.find({ key: 'gate-42' })
+    if (!found) await new Promise(r => setTimeout(r, 10))
+  }
+  expect(found).toBeTruthy()
+  expect(await pane.find({ type: 'Text', text: /SKYNET intercepts Claude's edit to sched\.py/ })).toBeTruthy()
+  await pane.select({ key: 'gate-42', value: String(['dict', 'heap', 'set', 'tuple'].indexOf(label)) })
+  const r = await call
+  await pane.unmount()
+  return r
+}
+
+test('no mercy: SKYNET asks in the battle pane, not in the chat; a right answer lets the edit through', async ($, on) => {
+  const calls = fakeGate(on)
+  const seen = person(on, 'heap')
+  await boot($, on)
+  const r: any = await answerInPane($, 'heap')
+  expect(seen.asked.length).toBe(0) // the question dialog was never used
+  expect(calls.some(c => c[0] === 'gate-answer' && c[1] === '42' && c[2] === 'heap')).toBe(true)
+  expect(seen.applied).toBe(true)
+  expect(r.deny).toBeUndefined()
+})
+
+test('no mercy: a wrong answer in the pane rejects the edit and SKYNET wins', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, 'heap')
+  await boot($, on)
+  const r: any = await answerInPane($, 'dict')
+  expect(seen.applied).toBe(false)
+  expect(String(r.deny ?? r.text)).toContain('Stop working')
+})
+
+test('no mercy: closing the pane while SKYNET asks moves the question to the dialog', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, 'heap')
+  await boot($, on)
+  const call = $.tool.call(EDIT as any)
+  const pane = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  for (let i = 0; i < 50 && !(await pane.find({ key: 'gate-42' })); i++) await new Promise(r => setTimeout(r, 10))
+  await pane.unmount()
+  await $.command.run({ command: 'battle', args: 'off' } as any) // closes the battle pane
+  const r: any = await call
+  expect(seen.asked.length).toBe(1)
+  expect(seen.applied).toBe(true)
+  expect(r.deny).toBeUndefined()
+})
+
 test('no mercy: SKYNET falls when Claude finishes the prompt with every edit answered', async ($, on) => {
   const calls = fakeGate(on)
   person(on, 'heap')
-  const logs: string[] = []
-  on('ui.log', (_: unknown, e: any) => {
-    logs.push(String(e.text ?? ''))
-    return { value: undefined }
-  })
   on('turn.complete', () => ({ text: 'done' }))
   await boot($, on)
-  await $.tool.call(EDIT as any)
-  await $.tool.call(EDIT as any)
+  await answerInPane($, 'heap')
+  await answerInPane($, 'heap')
   const pane = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
   await $.turn.complete({ answer: 'done', durationMs: 1000, isAborted: false, turnId: 't1', reason: 'answer' } as any)
   expect(calls.some(c => c[0] === 'battle-turn-end' && c[1] === 'answer')).toBe(true)
-  expect(logs.some(l => l.includes('SKYNET falls'))).toBe(true)
   expect(await pane.find({ type: 'Text', text: /V I C T O R Y/ })).toBeTruthy()
+  expect(await pane.find({ type: 'Text', text: /SKYNET falls/ })).toBeTruthy()
   await pane.unmount()
 })
 

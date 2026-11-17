@@ -108,14 +108,40 @@ function conceptGate(p, added, rnd) {
 
 const KEYWORDS = new Set(('if else elif for while return def class import from as in is not and or None True False null true false ' +
   'undefined const let var function new this self await async yield break continue try except catch finally throw raise with lambda ' +
-  'pass static public private protected void int auto bool char double float long unsigned struct std using namespace include template typename').split(' '));
+  'pass static public private protected void int auto bool char double float long unsigned struct std using namespace include template typename ' +
+  'size_t string vector queue deque map set unordered_map unordered_set pair cout cin cerr endl main print len range str list dict console').split(' '));
 const CMP = ['<=', '>=', '==', '!=', '<', '>'];
 const ARITH = ['+', '-', '*', '/'];
 
 /** Look-alikes of one line: other comparison or arithmetic operators, swapped names, numbers off by one. */
+/** A line without its trailing comment (as the language sees it: not inside a string). */
+function stripComment(line, language) {
+  const masked = lang.mask(line, language);
+  for (let i = 0; i < line.length; i++) {
+    if (masked[i] === ' ' && (line.startsWith('//', i) || line.startsWith('#', i)) && line.slice(0, i).trim()) return line.slice(0, i).trimEnd();
+  }
+  return line.trimEnd();
+}
+
+/** Blank out template/generic arguments (`vector<vector<int>>`, `Map<string, number>`) so their brackets aren't read as comparisons. */
+function blankTemplates(code) {
+  let prev
+  do {
+    prev = code
+    code = code.replace(/(\w)<([\w:*&, ]*)>/g, (m, c) => c + ' '.repeat(m.length - 1))
+  } while (code !== prev)
+  return code
+}
+
+/** Where `a` and `b` first differ, or -1. */
+function firstDiff(a, b) {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) return i
+  return -1
+}
+
 function lookAlikes(line, names) {
   const out = new Set();
-  const code = line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (m) => ' '.repeat(m.length)); // ignore string contents
+  const code = blankTemplates(line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (m) => ' '.repeat(m.length))); // ignore strings and template brackets
   const cmp = /<=|>=|==|!=|(?<![<>=!-])<(?![<=])|(?<![<>=-])>(?![>=])/.exec(code);
   if (cmp) for (const op of CMP) if (op !== cmp[0]) out.add(line.slice(0, cmp.index) + op + line.slice(cmp.index + cmp[0].length));
   const ar = /(?<=\w\s?)[+\-*/](?=\s?\w)/.exec(code);
@@ -135,36 +161,59 @@ function lookAlikes(line, names) {
   return [...out];
 }
 
-function lineGate(p, added, rnd) {
-  const ex = excerpt(p.after, added);
-  const code = ex.lines.join('\n');
-  const all = mutants(code, p.lang, { categories: ['basic', 'concurrency', 'lifetime'], headerLines: 0 });
-  // Only lines the change touched, only mutants that keep a line in place.
-  const touched = new Set(added.map((n) => n - ex.from + 1));
-  const byLine = new Map();
-  for (const m of all) {
-    if (m.removed || !touched.has(m.originalLine)) continue;
-    if (!byLine.has(m.originalLine)) byLine.set(m.originalLine, []);
-    byLine.get(m.originalLine).push(m);
+/**
+ * A look-alike that means the same as Claude's line would make the question
+ * unfair: `i < n` and `i != n` in a counting loop, or `a == b` and `b == a`.
+ */
+function equivalent(original, other) {
+  const flat = (t) => t.replace(/\s+/g, '')
+  if (flat(original) === flat(other)) return true
+  for (const [x, y] of [['<', '!='], ['>', '!=']]) {
+    if (other.replace(y, x) === original || original.replace(y, x) === other) return true
   }
-  const masked = lang.mask(code, p.lang);
-  const names = [...new Set((masked.match(/\b[A-Za-z_]\w*\b/g) || []).filter((w) => !KEYWORDS.has(w)))];
-  for (const n of touched) if (!byLine.has(n)) byLine.set(n, []);
-  // Lines with real mutants first (those make the best distractors), then any touched line.
+  const eq = /(\w+)\s*(==|!=)\s*(\w+)/
+  const a = original.match(eq)
+  const b = other.match(eq)
+  return !!a && !!b && a[2] === b[2] && a[1] === b[3] && a[3] === b[1] && original.replace(eq, '') === other.replace(eq, '')
+}
+
+function lineGate(p, added, rnd) {
+  // Work on the whole new file, then show a window around the hidden line:
+  // a new file can be long, and any of its lines may be the one asked about.
+  const lines = p.after.split('\n');
+  const all = mutants(p.after, p.lang, { categories: ['basic', 'concurrency', 'lifetime'], headerLines: 0 });
+  const touched = new Set(added.filter((n) => n >= 1 && n <= lines.length));
+  const byLine = new Map();
+  for (const n of touched) byLine.set(n, []);
+  for (const m of all) if (!m.removed && byLine.has(m.originalLine)) byLine.get(m.originalLine).push(m);
+  // Any changed line, at random; ones with real mutants first (those make the best distractors).
   const candidates = shuffle([...byLine.entries()], rnd)
     .filter(([n]) => {
-      const t = ex.lines[n - 1].trim();
-      return t.length > 3 && !/^(\}|\{|else:?|\)|\]|;|pass|break|continue)$/.test(t) && !/^\s*(#|\/\/|import\b|from\b|#include)/.test(t);
+      const t = (lines[n - 1] || '').trim();
+      return t.length > 3 && !/^(\}|\{|else:?|\)|\]|;|pass|break|continue)$/.test(t) && !/^\s*(#|\/\/|import\b|from\b|#include|using\b)/.test(t);
     })
-    .sort((x, y) => y[1].length - x[1].length);
+    .sort((x, y) => Number(y[1].length > 0) - Number(x[1].length > 0));
   for (const [n, ms] of candidates) {
-    const original = ex.lines[n - 1];
-    const wrong = [...ms.map((m) => m.mutatedLine), ...shuffle(lookAlikes(original, names), rnd)];
+    // The options are code only: a trailing comment would be the same in all of them.
+    const original = stripComment(lines[n - 1], p.lang);
+    const from = Math.max(1, n - 5);
+    const to = Math.min(lines.length, n + 5);
+    const window = lines.slice(from - 1, to);
+    const masked = lang.mask(window.join('\n'), p.lang);
+    // Swap in only variables: not keywords or types, and not names used as functions or templates.
+    const called = new Set((masked.match(/\b[A-Za-z_]\w*(?=\s*[(<])/g) || []));
+    const names = [...new Set((masked.match(/\b[A-Za-z_]\w*\b/g) || []).filter((w) => !KEYWORDS.has(w) && !called.has(w)))];
+    // Drop look-alikes that only change a template's brackets (vector<=int> is no real alternative).
+    const tmpl = blankTemplates(original)
+    const inTemplate = (w) => {
+      const i = firstDiff(original, w)
+      return i >= 0 && tmpl[i] === ' ' && original[i] !== ' '
+    }
+    const wrong = [...ms.map((m) => stripComment(m.mutatedLine, p.lang)), ...shuffle(lookAlikes(original, names), rnd)].filter((w) => !equivalent(original, w) && !inTemplate(w));
     const l = labelled(original, wrong, rnd);
     if (!l) continue;
     const indent = original.match(/^\s*/)[0];
-    const shown = ex.lines.map((t, i) => (i === n - 1 ? `${indent}???` : t)).join('\n');
-    const line = ex.from + n - 1;
+    const shown = window.map((t, i) => (from + i === n ? `${indent}???` : t)).join('\n');
     return {
       family: 'code',
       type: 'gate_line',
@@ -175,15 +224,15 @@ function lineGate(p, added, rnd) {
       difficulty: 'medium',
       grading: 'verified',
       xp: 10,
-      prompt: `Claude wants to change ${p.file}. One line of the new code is hidden (???, line ${line}). Which line did Claude write there?`,
+      prompt: `Claude wants to change ${p.file}. One line of the new code is hidden (???, line ${n}). Which line did Claude write there?`,
       code: shown,
       code_lang: p.lang,
       code_file: p.file,
-      code_start: ex.from,
-      code_end: ex.to,
+      code_start: from,
+      code_end: to,
       ...l,
-      explanation: `Claude's line ${line} is: ${original.trim()}`,
-      meta: { selectedBy: 'No Mercy', line },
+      explanation: `Claude's line ${n} is: ${original.trim()}`,
+      meta: { selectedBy: 'No Mercy', line: n },
     };
   }
   return null;
@@ -212,7 +261,18 @@ function create(db, input, { root, repoId, rnd = Math.random } = {}) {
   if (!p.lang || !lang.family(p.lang)) return { skip: `no question for ${p.file} (not code)` };
   const added = changedLines(p.before, p.after);
   if (!added.length) return { skip: 'the edit adds no code' };
-  const q = conceptGate(p, added, rnd) || lineGate(p, added, rnd) || packGate(p, rnd);
+  // Each kind of question in turn; one that fails to build falls through to the next,
+  // so SKYNET always asks something rather than waving the edit through.
+  let q = null;
+  for (const make of [() => conceptGate(p, added, rnd), () => lineGate(p, added, rnd), () => packGate(p, rnd)]) {
+    try {
+      q = make();
+    } catch (e) {
+      require('./util').log('gate', e);
+      q = null;
+    }
+    if (q) break;
+  }
   if (!q) return { skip: 'no question could be built' };
   const id = store.insertQuestion(db, { ...q, repo_id: repoId || null, batch: `${nowIso()}#gate`, status: 'gate' });
   const options = KEYS.filter((k) => q.choices[k]).map((k) => q.choices[k]);

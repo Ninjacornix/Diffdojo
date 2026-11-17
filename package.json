@@ -1,6 +1,6 @@
 {
   "name": "diffdojo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A Claude Code plugin that turns waiting time into practice: questions and retro quiz battles about the code Claude just wrote, plus concept quizzes on the topics you work in. Progress stays local; Claude writes questions about each change on your own plan.",
   "license": "MIT",
   "bin": {

@@ -82,6 +82,29 @@ test('an edit using a known API gets a technical question about it', () => {
   assert.ok(g.options.length >= 3);
 });
 
+test('a new file longer than the excerpt still gets a fair question (regression: bfs.cpp)', () => {
+  // A 40-line new C++ file used to crash the line question (it read past its
+  // 14-line excerpt), and No Mercy then let the edit through unasked.
+  const dir = folder();
+  const db = store.open();
+  const content = fixture('bfs.cpp');
+  for (let seed = 1; seed <= 25; seed++) {
+    const g = gate.create(db, { tool: 'Write', file_path: path.join(dir, 'bfs.cpp'), content }, { root: dir, rnd: rng(seed) });
+    assert.ok(g.id, `seed ${seed}: ${JSON.stringify(g)}`);
+    assert.ok(g.options.length >= 3);
+    for (const o of g.options) {
+      assert.ok(!/\/\/|#include/.test(o), `seed ${seed}: options are code only: ${o}`);
+      assert.ok(!/\w(<=|>=)\w+>/.test(o), `seed ${seed}: template brackets left alone: ${o}`);
+    }
+    if (g.code && /\?\?\?/.test(g.code)) {
+      const right = g.options.filter((o) => content.split('\n').some((l) => l.trim().startsWith(o)));
+      assert.strictEqual(right.length, 1, `seed ${seed}: exactly one option is Claude's line: ${JSON.stringify(g.options)}`);
+      assert.ok(!g.options.some((o) => o !== right[0] && o.replace('!=', '<') === right[0]), `seed ${seed}: no equivalent option`);
+    }
+  }
+  assert.ok(!fs.existsSync(path.join(require('../src/util').home(), 'logs')), 'nothing failed along the way');
+});
+
 test('non-code files pass without a question', () => {
   const dir = folder();
   const g = gate.create(store.open(), { tool: 'Write', file_path: 'README.md', content: '# hi\n' }, { root: dir });

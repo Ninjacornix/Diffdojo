@@ -96,6 +96,9 @@ export type BattleResult = {
   passed?: number
 }
 
+/** SKYNET's question about an edit Claude is about to make (No Mercy), as the pane shows it. */
+export type GateAsk = { id: number; file: string; prompt: string; code: string | null; options: string[] }
+
 export type BattleAnim = { kind: 'enemyHit' | 'playerHit' | 'dodge'; frame: number }
 
 declare module 'claude-code' {
@@ -105,6 +108,7 @@ declare module 'claude-code' {
       battleAllowed: boolean
       noMercy: boolean
       skynetView: boolean
+      gateAsk: Shaped<GateAsk | null>
       battleScene: Shaped<BattleView | null>
       battleAfter: Shaped<BattleView | null>
       battleQuestion: Shaped<BattleQuestion | null>

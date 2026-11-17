@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+### Fixed
+- **No Mercy let a new file through without a question.** For a new file longer than about 14 lines (Claude's `bfs.cpp`), building the "which line did Claude write?" question crashed, and No Mercy waved the edit through. It now works on the whole file, and if one kind of question can't be built, SKYNET asks another kind instead of letting the edit pass.
+- Fairer look-alike options: only code changes (never comments, which are left out of the options), template brackets are left alone (no `vector<=int>`), options that mean the same as Claude's line (`i != n` for `i < n`) are dropped, and only variables are swapped in (not types or function names).
+
+### Changed
+- **SKYNET asks in the battle pane**, not in the chat: the pane opens if it was closed, and you answer there. Claude Code's question dialog is only used when the pane can't be shown (or you close it mid-question). Several edits at once are asked one at a time. The "SKYNET wins" and "SKYNET falls" lines no longer go into the chat; the pane shows them.
+
 ## 0.2.2
 
 ### Changed

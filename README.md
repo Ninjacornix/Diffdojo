@@ -49,7 +49,7 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 
 ## No Mercy: fight SKYNET
 
-A battle mode for when you really want to keep up with Claude. **SKYNET** has no health bar, and neither do you. Its ability: **it intercepts every edit Claude makes for your prompt.** Before the change reaches the file, SKYNET asks you one question about that exact change, in Claude Code's own question dialog:
+A battle mode for when you really want to keep up with Claude. **SKYNET** has no health bar, and neither do you. Its ability: **it intercepts every edit Claude makes for your prompt.** Before the change reaches the file, SKYNET asks you one question about that exact change, right in the battle pane beside the chat (it opens if it was closed; Claude Code's question dialog is used only if the pane can't be shown):
 
 - *Which line did Claude write here?* The new code with one line hidden, the real line among look-alikes (`<` vs `<=`, swapped names, off-by-one numbers).
 - *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.

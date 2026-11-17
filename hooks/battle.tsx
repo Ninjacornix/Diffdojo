@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
-import type { BattleQuestion, BattleResult, BattleView, BattleAnim } from '../types'
+import type { BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk } from '../types'
 import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
 
@@ -29,6 +29,8 @@ const busy = atom({ plugin: 'diffdojo', key: 'battleBusy' } as const, false)
 // Whether a No Mercy fight is on (hooks/nomercy.tsx gates Claude's edits on it), and whether SKYNET's screen is showing.
 const noMercy = atom({ plugin: 'diffdojo', key: 'noMercy' } as const, false)
 const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, false)
+// SKYNET's question about an edit Claude is about to make, asked in this pane.
+const gateAsk = atom({ plugin: 'diffdojo', key: 'gateAsk' } as const, null, { shape: 'ga-1' })
 
 const IDLE_MS = 650
 const FRAME_MS = 90
@@ -36,6 +38,38 @@ const FRAME_MS = 90
 // Module timers (a reload drops them; the next open restarts them).
 let idleTimer: { cancel: () => void } | null = null
 let frameTimer: { cancel: () => void } | null = null
+// Who is waiting for the answer to SKYNET's question in the pane (hooks/nomercy.tsx).
+let gateWaiter: ((label: string | null) => void) | null = null
+
+/** Settle the pane question: an option label, or null when the pane can't take the answer. */
+async function settleGate($: Engine, label: string | null) {
+  const w = gateWaiter
+  gateWaiter = null
+  await update($, gateAsk, () => null)
+  w?.(label)
+}
+
+/**
+ * Ask SKYNET's question in the battle pane, opening it if needed. Resolves to
+ * the option chosen, or null if the pane can't be shown or is closed before
+ * an answer (the caller then asks in Claude Code's question dialog instead).
+ */
+export async function askInPane($: Engine, g: GateAsk): Promise<string | null> {
+  if (gateWaiter) await settleGate($, null)
+  const opened = await $.ui.open({ id: BATTLE_PANE, title: 'DiffDojo Battle', rows: 32, closeOnEscape: true, focus: true })
+  if (!opened.isPlaced) return null
+  if (!idleTimer) idleTimer = $.clock.every(IDLE_MS, () => update($, tick, n => (n + 1) % 1000))
+  const answered = new Promise<string | null>(resolve => {
+    gateWaiter = resolve
+  })
+  await update($, gateAsk, () => g)
+  return answered
+}
+
+/** Drop a question that no longer matters (Claude's turn ended under it). */
+export async function cancelPaneAsk($: Engine) {
+  if (gateWaiter) await settleGate($, null)
+}
 
 type Api = Record<string, any>
 
@@ -278,6 +312,8 @@ export function registerBattle(on: On) {
     if (e.id === BATTLE_PANE) {
       idleTimer?.cancel()
       idleTimer = null
+      // Closed with SKYNET's question open: it is asked in the question dialog instead.
+      if (gateWaiter) await settleGate($, null)
     }
     return next(e)
   })
@@ -290,6 +326,7 @@ export function registerBattle(on: On) {
     const a = await read($, anim)
     const i = await read($, intro)
     const t = await read($, tick)
+    const ask = await read($, gateAsk)
     const W = Math.max(56, Math.min((e.props.bodyColumns || 80) - 1, 92))
 
     // Scene lines; single-segment rows stay one Text so they read as one string.
@@ -307,6 +344,31 @@ export function registerBattle(on: On) {
       )
     const rule = <Text>{'═'.repeat(W)}</Text>
     const rowsOf = (rows: BoxRow[]) => draw(box(rows, W, t, false, 0).slice(1, -1))
+
+    // ---- SKYNET intercepts one of Claude's edits: its question, answered here
+    if (ask) {
+      const field = s && s.enemy ? battlefield({ view: s, width: W, tick: t, intro: INTRO_STEPS, anim: null, enemyHp: s.enemy.hp, playerHp: s.player.hp }) : []
+      const codeRows = ask.code ? ask.code.split('\n').slice(0, 14).map(c => ({ text: '  ' + c, dim: true })) : []
+      return (
+        <Box flexDirection="column">
+          {draw(field)}
+          {rule}
+          {rowsOf([
+            { text: `SKYNET intercepts Claude's edit to ${ask.file}!` },
+            ...wrap([ask.prompt], W - 6).map(text => ({ text })),
+            ...codeRows,
+          ])}
+          <Select
+            key={`gate-${ask.id}`}
+            autoFocus
+            options={ask.options.map((label, n) => ({ value: String(n), label: `${'abcd'[n]}) ${label}` }))}
+            onSelect={v => settleGate($, ask.options[Number(v)] ?? '')}
+          />
+          {rule}
+          <Text dimColor>up/down choose · Enter answer · one wrong answer and SKYNET wins</Text>
+        </Box>
+      )
+    }
 
     // ---- No Mercy: SKYNET's screen, with the warning, before the fight starts
     if ((await read($, skynetView)) && (!s || !s.mode || s.phase === 'menu')) {
