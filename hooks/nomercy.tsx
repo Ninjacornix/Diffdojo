@@ -1,8 +1,10 @@
 // DiffDojo No Mercy: a fight against SKYNET with no health bars on either side.
 // While it is on (picked from the battle menu, or /nomercy), SKYNET intercepts
 // every edit Claude makes for your prompt and asks one question about that exact
-// change. Answer right and the edit goes through. Answer wrong (or close the
-// question) and you lose: the edit is rejected and Claude's turn is stopped.
+// change, in the battle pane (opened if needed; Claude Code's question dialog
+// only when the pane can't be shown). Answer right and the edit goes through.
+// Answer wrong (or skip) and you lose: the edit is rejected and Claude's turn
+// is stopped.
 // When Claude finishes the prompt with every edit answered, SKYNET falls.
 // Questions and grading come from the CLI (`diffdojo api gate`); the answer
 // key never reaches this module. The fight itself is drawn by ./battle.
@@ -11,7 +13,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
 import type { BattleResult, BattleView } from '../types'
-import { endFight, openBattle, showIntercept, showSkynet, showTurnEnd } from './battle'
+import { askInPane, cancelPaneAsk, endFight, openBattle, showIntercept, showSkynet, showTurnEnd } from './battle'
 
 type Engine = EngineInterface
 type Gate = { id?: number; skip?: string; file?: string; prompt?: string; code?: string | null; options?: string[]; error?: string }
@@ -34,6 +36,8 @@ const GATED = /^(Edit|Write|MultiEdit)$/
 
 // The main loop's running turn, so a wrong answer can stop it (a reload drops it).
 let mainTurn: string | null = null
+// Claude can make several edits at once: SKYNET asks about them one at a time.
+let queue: Promise<unknown> = Promise.resolve()
 
 async function cli($: Engine, args: string[], stdin?: string): Promise<Record<string, any>> {
   try {
@@ -55,11 +59,13 @@ export async function noMercySessionStart($: Engine) {
  * if every edit for the prompt was answered, SKYNET falls.
  */
 export async function noMercyTurnComplete($: Engine, e: { agentId?: string; reason: string }) {
-  if (e.agentId !== undefined || !(await read($, noMercy))) return
+  if (e.agentId !== undefined) return
+  await cancelPaneAsk($) // a question still open belongs to a turn that is over
+  if (!(await read($, noMercy))) return
   const end = await cli($, ['battle-turn-end', e.reason])
   if (!end.victory || !end.state) return
   await showTurnEnd($, end.state as BattleView)
-  $.ui.log(`DiffDojo No Mercy: Claude finished your prompt and you answered for all ${end.passed} of its edits. ${BOSS} falls!`)
+  $.ui.log(`DiffDojo No Mercy: Claude finished your prompt and you answered for all ${end.passed} of its edits. ${BOSS} falls!`, { to: 'debug' })
   for (const t of end.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 9000 })
 }
 
@@ -87,14 +93,23 @@ export function registerNoMercy(on: On) {
       return next(e)
     }
 
-    // The person's question, in Claude Code's own question dialog. Closing it counts as a wrong answer.
-    let picked = ''
-    try {
-      const intro = `${BOSS} intercepts Claude's edit to ${g.file}!`
-      picked = await $.ui.ask(g.code ? `${intro}\n\n${g.code}\n\n${g.prompt}` : `${intro}\n\n${g.prompt}`, { options: g.options, header: BOSS })
-    } catch {
-      picked = ''
+    // The question, one at a time: in the battle pane, else in Claude Code's question dialog.
+    // Skipping it (closing the dialog) counts as a wrong answer.
+    const ask = async (): Promise<string> => {
+      const inPane = await askInPane($, { id: g.id!, file: g.file || '', prompt: g.prompt || '', code: g.code ?? null, options: g.options! })
+      if (inPane !== null) return inPane
+      if (!(await read($, noMercy))) return '\u0000' // the fight ended while it waited (Claude's turn is over)
+      try {
+        const intro = `${BOSS} intercepts Claude's edit to ${g.file}!`
+        return await $.ui.ask(g.code ? `${intro}\n\n${g.code}\n\n${g.prompt}` : `${intro}\n\n${g.prompt}`, { options: g.options!, header: BOSS })
+      } catch {
+        return ''
+      }
     }
+    const turn = queue.then(ask)
+    queue = turn.catch(() => undefined)
+    const picked = await turn
+    if (picked === '\u0000') return { deny: 'DiffDojo No Mercy: this edit came after the turn ended.' }
     const r: Graded = await cli($, ['gate-answer', String(g.id), picked])
     if (r.fight) await showIntercept($, r.fight, g.prompt || '')
 
@@ -103,10 +118,12 @@ export function registerNoMercy(on: On) {
       return next(e)
     }
 
+    // The pane shows what happened; only the debug log gets the full line.
     $.ui.log(
       `DiffDojo No Mercy: ${picked ? 'wrong answer' : 'no answer'}. ${BOSS} wins: Claude's edit to ${g.file} was rejected and Claude was stopped.` +
         (r.answerText ? ` The answer was: ${r.answerText}.` : '') +
         (r.explanation ? ` ${r.explanation}` : ''),
+      { to: 'debug' },
     )
     const turnId = mainTurn
     if (turnId) void $.turn.abort({ turnId }).catch(() => undefined)

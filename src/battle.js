@@ -40,6 +40,8 @@ const LADDERS = {
     { id: 'monolith', name: 'LEGACY MONOLITH', level: 55, hp: 140, dmg: 32 },
     { id: 'evil', name: 'EVIL CLAUDE', level: 99, hp: 180, dmg: 34, boss: true, color: '#d97757' },
   ],
+  // Bug Hunter: it slips a bug into a function Claude wrote; you pick the fix.
+  bughunter: [{ id: 'freellm', name: 'FREE CHINESE LLM', level: 64, hp: 150, dmg: 28, boss: true, color: '#c94fd6' }],
   // One enemy without health: it falls when Claude finishes the prompt (hp unused).
   nomercy: [{ id: 'skynet', name: 'SKYNET', level: 100, hp: 1, dmg: 0, boss: true, color: '#e0533d' }],
 };
@@ -53,6 +55,7 @@ const MODES = {
   professional: { label: 'Professional', difficulties: ['hard'], preferCode: true },
   endless: { label: 'Endless', difficulties: null },
   nomercy: { label: 'No Mercy', difficulties: [], noHealth: true },
+  bughunter: { label: 'Bug Hunter', difficulties: ['easy', 'medium', 'hard'], bugs: true },
 };
 
 const PLAYER_MAX = 100;
@@ -169,7 +172,7 @@ const KEYS = ['a', 'b', 'c', 'd'];
 // The battle asks technical questions only: what Claude's code uses and what it
 // is (code concepts, data structures, algorithms, complexity) and concept quizzes;
 // never "which line changed" or "why did Claude...".
-const BATTLE_TYPES = ['project', 'concept', 'data_structure', 'algorithm', 'complexity', 'pack'];
+const BATTLE_TYPES = ['project', 'prepared', 'concept', 'data_structure', 'algorithm', 'complexity', 'pack'];
 
 /** Turn a stored question into a 4-answer battle question, or null. */
 function toFour(q, rnd = Math.random) {
@@ -207,6 +210,15 @@ function nextQuestion(db, { repoId, rnd = Math.random } = {}) {
   const s = load();
   if (!s.mode || s.phase !== 'fight') return { error: 'no battle in progress' };
   if (MODES[s.mode].noHealth) return { error: 'SKYNET only asks about the edits Claude makes', state: view(s) };
+  if (MODES[s.mode].bugs) {
+    // Bug Hunter: a fresh bug in one of Claude's functions every time.
+    const q = require('./bughunt').build(db, { repoId, rnd });
+    if (!q) return { error: 'no function to break yet: let Claude write some code first', state: view(s) };
+    const four = toFour(q, rnd);
+    s.pending = { id: q.id, ...four };
+    save(s);
+    return { question: publicQ(q, s.pending), state: view(s) };
+  }
   if (s.pending) {
     const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', s.pending.id));
     if (q && q.status !== 'answered') return { question: publicQ(q, s.pending), state: view(s) };
@@ -263,7 +275,7 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   const k = String(key).trim().toLowerCase();
   if (!p.map[k]) return { error: 'answer with a, b, c or d' };
   const graded = await require('./grader').answer(db, q, p.map[k], { mode: 'battle', cfg, root });
-  const ev = exchange(db, s, graded.correct === true, q.difficulty, rnd, { correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, trophies: graded.trophies || [] });
+  const ev = exchange(db, s, graded.correct === true, q.difficulty, rnd, { correctKey: p.correctKey, picked: k, xp: graded.xp, xpCapped: !!graded.xpCapped, explanation: q.explanation, trophies: graded.trophies || [] });
   s.pending = null;
   save(s);
   return { ...ev, state: view(s) };

@@ -7,7 +7,12 @@ DiffDojo has no money, credits or tokens. That doesn't mean there's nothing to e
 1. **Only trustworthy answers count.** Full XP comes from code challenges graded by execution and from curated questionnaire packs reviewed by humans (see [QUESTIONS_AND_GRADING.md](QUESTIONS_AND_GRADING.md)). Model-generated questions give half XP and never count for belt exams. Model-graded "explain" answers give feedback, not XP.
 2. **Rank needs skill, not grinding.** Belts require accuracy on harder questions, not just a pile of XP from easy ones.
 3. **The biggest rewards go to the most useful act:** catching a real bug in code Claude wrote.
-4. **Everything is local and self-reported.** Since nothing is uploaded, cheating only cheats yourself. Shared badges say "self-reported".
+4. **Everything is local and self-reported.** Scores leave the machine only if the user shares them (a gist on their own account), and shared cards and badges say "self-reported".
+5. **No unlimited score.** XP is paid once per question *content*: a question re-created by a battle, Bug Hunter, Prepare or `generate` pays nothing the second time (review mode re-pays half, once). Practice that can be generated without end (pack questions, battles, Bug Hunter, prepared topics) earns at most 300 XP a day (`PRACTICE_XP_PER_DAY`); a capped question isn't used up and can pay another day. Questions about Claude's real changes aren't capped: they're bounded by the real changes.
+
+### What this can't stop
+
+DiffDojo runs on the user's machine and keeps its data in `~/.diffdojo/` (SQLite). Someone determined can edit that database, change the source, or write a gist by hand with any numbers, and no local check can prevent it: anything the program could verify with, the user could change too. So the rules above close the loopholes *inside* the game (farming, repeats, endless generation), and shared scores are labelled self-reported. A ranking you could trust would need a server that sees and grades every answer itself.
 
 ## Belts (rank)
 

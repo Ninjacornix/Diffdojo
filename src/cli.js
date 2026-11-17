@@ -35,6 +35,9 @@ Progress
   stats [--repo] [--json]         Belts, XP, accuracy, streak, trophies, bugs caught, across all projects (/diffdojo:stats)
   badge [--out <dir>] [--style flat|square]
                                   Write an SVG + Markdown badge (self-reported)
+  share [--yes] [--projects] [--secret] | share --remove
+                                  Put your score card in a GitHub Gist on your account (uses the gh CLI);
+                                  numbers only, no code or project names unless --projects
   report-bug --title "<t>" --test <path> [--file <f> --lines a-b] [--cmd "<cmd>"] [--critique <qid>]
   report-bug --scaffold --file <f> [--function <name>] [--title "<t>"]
                                   Prove a real bug in Claude's code with a failing test (/diffdojo:report-bug)
@@ -280,6 +283,30 @@ const commands = {
     console.log(st.format(s, { color: color(flags) }));
   },
 
+  share({ flags }) {
+    const share = require('./share');
+    if (flags.remove) {
+      const r = share.remove();
+      return console.log(r.removed ? `Deleted your shared score (${r.url}).` : r.error);
+    }
+    const opts = { projects: !!flags.projects, secret: !!flags.secret };
+    if (!flags.yes) {
+      const p = share.preview(db(), opts);
+      console.log('This is what would be published as a GitHub Gist on your account:\n');
+      console.log(p.text.split('\n').map((l) => '  ' + l).join('\n'));
+      console.log(`\n${opts.secret ? 'A secret gist (only people with the link can see it).' : 'A public gist: anyone can see it.'} Plus diffdojo-score.json (the same numbers) and your badge.`);
+      if (p.shared) console.log(`Already shared at ${p.shared.url}: publishing updates it.`);
+      return console.log('Re-run with --yes to publish.');
+    }
+    const r = share.publish(db(), opts);
+    if (r.error) {
+      process.exitCode = 1;
+      return console.log(r.error);
+    }
+    console.log(`${r.created ? 'Shared' : 'Updated'}: ${r.url}`);
+    console.log(`Badge: ${r.badgeUrl}`);
+  },
+
   badge({ flags }) {
     const out = path.resolve(flags.out || '.');
     const r = require('./badge').write(db(), out, { style: flags.style });
@@ -369,7 +396,7 @@ const commands = {
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
-    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && sub !== 'status') return out({ enabled: false, battleAllowed, queued: 0, question: null });
+    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'scores', 'settings', 'topics', 'prepare', 'share', 'share-preview', 'share-remove'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
@@ -385,6 +412,98 @@ const commands = {
       const noticeFile = path.join(util.home(), 'model-notice.json');
       const modelNotice = !!(cfg.model && cfg.model.enabled && enabled && !fs.existsSync(noticeFile));
       return out({ ...status(), battle: cfg.battle, noMercy: require('./battle').noMercyActive(), modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
+    }
+    if (sub === 'achievements') {
+      // The battle menu's Achievements tab: trophies (earned or not), belts, battle records.
+      const rewards = require('./rewards');
+      const st = stats.compute(d, {});
+      const earned = new Map(st.trophies.map((t) => [t.id, t.awarded_at]));
+      const b = require('./battle').load();
+      return out({
+        belt: st.overallBelt, xp: st.totalXp, streak: st.streak,
+        trophies: Object.entries(rewards.TROPHIES).map(([id, name]) => ({ id, name, earned: earned.has(id), at: earned.get(id) || null })),
+        tracks: st.tracks.map((t) => ({ name: t.name, belt: t.belt, xp: t.xp, nextAt: t.nextAt })),
+        battle: { wins: b.wins || {}, best: b.best || {} },
+      });
+    }
+    if (sub === 'scores') {
+      // The battle menu's Scores screen: totals across every project, then each project.
+      const st = stats.compute(d, {});
+      const acc = (rid) => {
+        const r = d.get(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(a.correct), 0) AS ok FROM answers a JOIN questions q ON q.id = a.question_id
+           WHERE a.correct IS NOT NULL AND ${rid === null ? 'q.repo_id IS NULL' : 'q.repo_id = ?'}`, ...(rid === null ? [] : [rid]));
+        return r.n ? Math.round((100 * r.ok) / r.n) : null;
+      };
+      const all = d.get('SELECT COUNT(*) AS n, COALESCE(SUM(correct), 0) AS ok FROM answers WHERE correct IS NOT NULL');
+      const projects = d.all(
+        `SELECT r.id, r.path,
+          (SELECT COALESCE(SUM(amount), 0) FROM xp_events x WHERE x.repo_id = r.id) AS xp,
+          (SELECT COUNT(*) FROM answers a JOIN questions q ON q.id = a.question_id WHERE q.repo_id = r.id AND a.correct IS NOT NULL) AS answered,
+          (SELECT MAX(a.answered_at) FROM answers a JOIN questions q ON q.id = a.question_id WHERE q.repo_id = r.id) AS last
+         FROM repos r ORDER BY xp DESC, answered DESC`,
+      ).map((p) => ({ name: path.basename(p.path || '') || p.id, path: p.path, xp: p.xp, answered: p.answered, accuracy: acc(p.id), last: p.last, here: p.id === repoId }));
+      // Whatever the listed projects don't account for (battles outside a project, removed projects).
+      const loose = st.totalXp - projects.reduce((n, p) => n + p.xp, 0);
+      if (loose) projects.push({ name: '(battles and quizzes outside a project)', path: null, xp: loose, answered: null, accuracy: acc(null), last: null, here: false });
+      const b = require('./battle').load();
+      return out({
+        belt: st.overallBelt, xp: st.totalXp, xpToday: st.xpToday, streak: st.streak,
+        answered: all.n, accuracy: all.n ? Math.round((100 * all.ok) / all.n) : null,
+        trophies: st.trophies.length, projects, battle: { wins: b.wins || {}, best: b.best || {} },
+      });
+    }
+    if (sub === 'share-preview') return out(require('./share').preview(d, { projects: pos[2] === 'projects' }));
+    if (sub === 'share') return out(require('./share').publish(d, { projects: pos[2] === 'projects' }));
+    if (sub === 'share-remove') return out(require('./share').remove());
+    if (sub === 'settings') {
+      const m = config.load(repoId).model || {};
+      return out({ enabled: !!m.enabled, model: m.model || null, effort: m.effort || 'low', perHour: m.perHour || null });
+    }
+    if (sub === 'topics') {
+      // Suggestions for "Prepare questions": this project's topics first, then the packs' tracks.
+      const prof = root ? require('./topics').profile(d, repoId, config.load(repoId).pinnedTopics) : [];
+      const names = require('./topics').TRACK_NAMES;
+      const fromProject = (Array.isArray(prof) ? prof : []).map((t) => (typeof t === 'string' ? t : t.topic)).filter(Boolean).slice(0, 6);
+      const extra = ['epoll and non-blocking sockets', 'C++ move semantics', 'Python asyncio', 'JavaScript promises and the event loop', 'Big-O and data structures', 'SQL indexes'];
+      const seen = new Set();
+      const list = [...fromProject, ...Object.values(names).filter((n) => n !== 'General'), ...extra].filter((t) => t && !seen.has(t) && seen.add(t));
+      return out({ topics: list.slice(0, 16) });
+    }
+    if (sub === 'prepare') {
+      // Questions written in advance on a topic: by Claude (model path), else picked from the packs.
+      const topic = pos.slice(2).join(' ').trim();
+      if (!topic) return out({ error: 'name a topic' });
+      const cfg = config.load(repoId);
+      const batch = `${util.nowIso()}#prepared`;
+      const store = require('./store');
+      const slug = util.slug ? util.slug(topic) : topic.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      let added = 0;
+      let via = 'packs';
+      const model = require('./model');
+      if (model.available(d, cfg).ok) {
+        const prof = root ? require('./topics').profile(d, repoId, cfg.pinnedTopics) : [];
+        const qs = await model.topicQuestions(d, cfg, { topic, projectTopics: (Array.isArray(prof) ? prof : []).map((t) => (typeof t === 'string' ? t : t.topic)).filter(Boolean) });
+        for (const q of qs) {
+          store.insertQuestion(d, {
+            family: 'questionnaire', type: 'prepared', format: 'choice', topic: `prepared/${slug}`, track: null, difficulty: q.difficulty,
+            grading: 'model', xp: { easy: 5, medium: 8, hard: 10 }[q.difficulty] || 8, title: `Prepared · ${topic}`, prompt: q.question,
+            choices: q.choices, answer: q.answer, explanation: q.explanation, evidence: 'written by Claude on request, confirmed by a blind second answer',
+            meta: { selectedBy: `prepared: ${topic}`, generatedBy: 'model' }, repo_id: repoId || null, batch,
+          });
+          added++;
+        }
+        if (added) via = 'claude';
+      }
+      if (!added) {
+        const words = topic.toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+        const hits = require('./packs').load().questions.filter((q) => q.format === 'multiple_choice' && words.some((w) => `${q.topic} ${q.track} ${q.question}`.toLowerCase().includes(w)));
+        for (const pq of util.shuffle(hits).slice(0, 6)) {
+          store.insertQuestion(d, { ...require('./packs').toQuestion(pq, { type: 'prepared', meta: { pack: pq.pack, selectedBy: `prepared: ${topic}` } }), repo_id: repoId || null, batch });
+          added++;
+        }
+      }
+      return out({ added, via, topic });
     }
     if (sub === 'model-notice-ack') {
       util.writeJson(path.join(util.home(), 'model-notice.json'), { at: util.nowIso() });

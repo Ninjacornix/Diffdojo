@@ -21,6 +21,7 @@ export const PALETTE = {
   low: '#d9a13b', // HP getting low
   boss: '#d97757', // Evil Claude's orange
   skynet: '#e0533d', // SKYNET, No Mercy's boss: red
+  freellm: '#c94fd6', // FREE CHINESE LLM, Bug Hunter's boss
 }
 
 // ---------------------------------------------------------------- sprites
@@ -161,6 +162,30 @@ const ART: Record<string, string[]> = {
   ],
 }
 
+// FREE CHINESE LLM, Bug Hunter's boss: a chat bubble that "helpfully" rewrites your code.
+const FREELLM: string[][] = [
+  [
+    R`    _____________________    `,
+    R`   /                     \   `,
+    R`  |   FREE!    @     @    |  `,
+    R`  |   $0.00       __      |  `,
+    R`  |   tokens   \_/  \_/   |  `,
+    R`   \_______   ___________/   `,
+    R`           \ |               `,
+    R`            \|  "I fixed it" `,
+  ],
+  [
+    R`    _____________________    `,
+    R`   /                     \   `,
+    R`  |   FREE!    -     -    |  `,
+    R`  |   $0.00       __      |  `,
+    R`  |   tokens   \_/  \_/   |  `,
+    R`   \_______   ___________/   `,
+    R`           \ |               `,
+    R`            \|  "trust me"   `,
+  ],
+]
+
 // SKYNET, No Mercy's boss: a server rack with one great eye, guarding your files.
 const SKYNET: string[][] = [
   [
@@ -219,6 +244,7 @@ const EVIL: string[][] = [
 export function art(id: string, frame: number): string[] {
   if (id === 'evil') return EVIL[frame % 2]
   if (id === 'skynet') return SKYNET[frame % 2]
+  if (id === 'freellm') return FREELLM[frame % 2].map(r => r.replace(/@/g, 'o'))
   const src = ART[id] || ART.typo
   const w = Math.max(...src.map(r => r.length))
   const rows = src.map(r => r.padEnd(w))
@@ -227,7 +253,7 @@ export function art(id: string, frame: number): string[] {
 }
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
-  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : PALETTE.ink
+  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : id === 'freellm' ? PALETTE.freellm : PALETTE.ink
   return art(id, frame).map(t => [{ t, c, b: !!c }])
 }
 
@@ -382,7 +408,7 @@ export function battlefield(s: SceneInput): Line[] {
   const shake = s.anim?.kind === 'enemyHit' && hit ? (s.anim.frame % 2 ? 2 : -1) : 0
   const eAt = Math.max(0, Math.min(W - eW, W - eW - 2 + slideIn + shake))
   const remaining = v.stages ? v.stages - v.stage : 1
-  const bossColor = e && e.id === 'skynet' ? PALETTE.skynet : PALETTE.boss
+  const bossColor = e && e.id === 'skynet' ? PALETTE.skynet : e && e.id === 'freellm' ? PALETTE.freellm : PALETTE.boss
   const status: Line[] = !e
     ? []
     : inPlace && v.noHealth
@@ -521,3 +547,191 @@ export const TITLE = [
   '|___/|_|_| |_| |___/\\___/ \\___/ ',
   '                     |__/  BATTLE',
 ]
+
+// ---------------------------------------------------------------- trophy art
+// One small original picture per trophy (src/rewards.js TROPHIES), shown on the
+// battle menu's Achievements screen: bright when earned, grey while locked.
+
+const CUP = [
+  R`   ___________   `,
+  R`  '._==_==_=_.'  `,
+  R`  .-\:      /-.  `,
+  R` | (|:.     |) | `,
+  R`  '-|:.     |-'  `,
+  R`    \::.    /    `,
+  R`     '::. .'     `,
+  R`       ) (       `,
+  R`     _.' '._     `,
+]
+
+export const TROPHY_ART: Record<string, string[]> = {
+  'first-catch': [
+    R`     _________     `,
+    R`    |         |    `,
+    R`    |   \o/   |    `,
+    R`    |  -( )-  |    `,
+    R`    |__/   \__|    `,
+    R`   =============   `,
+    R`   caught: 1 bug   `,
+  ],
+  'bug-hunter-1': [
+    R`     .---.         `,
+    R`    ( o o )    x5  `,
+    R`     \ ^ /         `,
+    R`   ---| |---       `,
+    R`     /   \         `,
+    R`    ^     ^        `,
+  ],
+  'bug-hunter-2': [
+    R`    _/\_/\_/\_     `,
+    R`     .-----.       `,
+    R`    ( o   o )  x25 `,
+    R`     \  ^  /       `,
+    R`   ---|   |---     `,
+    R`     /     \       `,
+  ],
+  'bug-hunter-3': [
+    R`      _______      `,
+    R`     /       \     `,
+    R`    |  () ()  | x100`,
+    R`     \   ^   /     `,
+    R`      |||||||      `,
+    R`    \/       \/    `,
+    R`    /\       /\    `,
+  ],
+  'mutant-slayer': [
+    R`          /|       `,
+    R`         / |       `,
+    R`  o====[===|=====> `,
+    R`         \ |       `,
+    R`          \|       `,
+    R`   25 mutants down `,
+  ],
+  'clean-sweep': [
+    R`          ||       `,
+    R`          ||       `,
+    R`          ||       `,
+    R`         /  \      `,
+    R`        //////\    `,
+    R`       ////////    `,
+    R`    not one miss   `,
+  ],
+  'iron-streak': [
+    R`       (  )        `,
+    R`      (    )       `,
+    R`     ( (  ) )   30 `,
+    R`      \ \/ /   days`,
+    R`       \__/        `,
+    R`     [======]      `,
+  ],
+  polyglot: [
+    R` .----. .----. .----. `,
+    R` | C++| | Py | | JS | `,
+    R` '----' '----' '----' `,
+    R`    \      |      /   `,
+    R`     '--[GREEN]--'    `,
+  ],
+  architect: [
+    R`        /\         `,
+    R`       /  \        `,
+    R`      /____\       `,
+    R`      | [] |       `,
+    R`      | [] |       `,
+    R`    __|____|__     `,
+  ],
+  'mind-reader': [
+    R`      .-""-.       `,
+    R`     /  ()  \      `,
+    R`    |  .--.  |     `,
+    R`     \ '--' /      `,
+    R`      '-..-'       `,
+    R`   "I know why."   `,
+  ],
+  'second-opinion': [
+    R` .------.  .------. `,
+    R` | bug? |  | yes! | `,
+    R` '--.---'  '---.--' `,
+    R`    |          |    `,
+    R`   (o)        (o)   `,
+  ],
+  scholar: [
+    R`    ______ ______    `,
+    R`   /      Y      \   `,
+    R`  | ===== | ===== |  `,
+    R`  | ===== | ===== |  `,
+    R`  |_______|_______|  `,
+    R`    every answer     `,
+  ],
+  'pack-author': [
+    R`    _________        `,
+    R`   | ======= |   __  `,
+    R`   | ======= |  / /  `,
+    R`   | =====   | / /   `,
+    R`   |_________|/_/    `,
+    R`    merged!          `,
+  ],
+  skeptic: [
+    R`      ____         `,
+    R`     /    \        `,
+    R`         _/        `,
+    R`        |          `,
+    R`        o          `,
+    R`   no bug here x5  `,
+  ],
+  'battle-easy': [
+    R`     ______        `,
+    R`    |  /\  |       `,
+    R`    | /  \ |  ROOKIE`,
+    R`    | \  / |       `,
+    R`     \_\/_/        `,
+  ],
+  'battle-medium': [
+    R`   \\        //    `,
+    R`    \\      //     `,
+    R`     \\    //      `,
+    R`      \\  //       `,
+    R`       \\//        `,
+    R`       //\\        `,
+    R`    BUG SQUASHER   `,
+  ],
+  'battle-hard': [
+    R`       .--.        `,
+    R`      /    \       `,
+    R`     _|____|_      `,
+    R`    |   ()   |     `,
+    R`    |   ||   |     `,
+    R`    |________|     `,
+    R`   no more races   `,
+  ],
+  'evil-claude': [
+    R`         \  |  /         `,
+    R`       \  \ | /  /       `,
+    R`  ------ ( x_x ) ------  `,
+    R`       /  / | \  \       `,
+    R`         /  |  \         `,
+    R`      EVIL CLAUDE: 0     `,
+  ],
+  skynet: [
+    R`   ___________________   `,
+    R`  |  _______________  |  `,
+    R`  | |    ( x   x )  | |  `,
+    R`  | |_______________| |  `,
+    R`  |  ::  [ OFFLINE ]  |  `,
+    R`  |___________________|  `,
+  ],
+  'battle-bughunter': [
+    R` [==][==][==][==][==] `,
+    R` [=][==][==][==][==][]`,
+    R` [==][==][==][==][==] `,
+    R` [=][==][==][==][==][]`,
+    R`       FIREWALL       `,
+    R`   "I fixed it": no.  `,
+  ],
+}
+
+/** A trophy's picture (rows padded to one width): its own, else a cup. */
+export function trophyArt(id: string): string[] {
+  const rows = TROPHY_ART[id] || CUP
+  const w = Math.max(...rows.map(r => [...r].length))
+  return rows.map(r => r + ' '.repeat(w - [...r].length))
+}

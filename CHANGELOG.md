@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+- **Bug Hunter**, a special fight against FREE CHINESE LLM: it slips a bug into a function Claude wrote and you pick the line that fixes it. Bugs come from Claude's recent code (or the demo project); Python/JS bugs are run first to make sure they change the result. Only the question has the bug. Trophy: *Firewall*. Also in `diffdojo battle`.
+- **Prepare questions on a topic** (battle menu): pick a suggested topic or type your own; Claude writes questions on it in advance (checked blind like the rest), or the packs supply them. They come up in your next fights.
+- **Scores** screen: one score across all your projects (XP, belt, streak, XP today, answers, accuracy) and a row per project with its XP, answers and accuracy (`diffdojo api scores`).
+- **Share your score** as a GitHub Gist on your own account (`diffdojo share`, or Scores → Share my score): shows the exact card first, publishes through the GitHub CLI, numbers only (no code, questions or project names unless `--projects`), updates the same gist next time, `--remove` deletes it.
+- **Achievements** screen: belt, XP, streak, belts per topic, and all trophies, earned or not. Each trophy opens with its own ASCII art (bright when earned, grey while locked), what it's for and when you earned it.
+- **Settings** screen: the model that writes your questions (Haiku 5.5 / Sonnet 5.5 / Opus 5.5), its effort (low / medium / high, passed as `--effort`), and whether Claude writes questions at all. New setting `model.effort` (default `low`).
+
+### Changed
+- **No unlimited score.** XP is paid once per question content, so questions re-created by battles, Bug Hunter, Prepare or `generate` can't be farmed (review re-pays half once). Practice XP (packs, battles, Bug Hunter, prepared topics) is capped at 300 a day, and the fight says when the cap is reached; a capped question can still pay another day. Questions about Claude's real changes aren't capped.
+- **The battle menu is organised into screens**: Fight, Special fights, Prepare, Scores, Achievements, Settings, with a tab bar showing where you are and Back on each.
+
+### Fixed
+- **Starting a fight looked stuck**: after "... wants to fight!" the only control was a blinking marker that showed as an empty grey box. The fight now starts by itself once the enemy is in place (Enter skips the wait), and Continue is labelled.
+
+## 0.2.3
+
+### Fixed
+- **No Mercy let a new file through without a question.** For a new file longer than about 14 lines (Claude's `bfs.cpp`), building the "which line did Claude write?" question crashed, and No Mercy waved the edit through. It now works on the whole file, and if one kind of question can't be built, SKYNET asks another kind instead of letting the edit pass.
+- Fairer look-alike options: only code changes (never comments, which are left out of the options), template brackets are left alone (no `vector<=int>`), options that mean the same as Claude's line (`i != n` for `i < n`) are dropped, and only variables are swapped in (not types or function names).
+
+### Changed
+- **SKYNET asks in the battle pane**, not in the chat: the pane opens if it was closed, and you answer there. Claude Code's question dialog is only used when the pane can't be shown (or you close it mid-question). Several edits at once are asked one at a time. The "SKYNET wins" and "SKYNET falls" lines no longer go into the chat; the pane shows them.
+
 ## 0.2.2
 
 ### Changed

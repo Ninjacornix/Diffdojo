@@ -150,6 +150,25 @@ function run(cmd, args, opts = {}) {
   };
 }
 
+/**
+ * Run a CLI found on PATH (claude, gh). On Windows an npm or scoop install is
+ * often a .cmd shim, which Node can only start through cmd.exe: the command
+ * line is then built by hand and passed verbatim, so the quoted path survives.
+ * Input goes over stdin; the arguments are fixed flags.
+ */
+function runTool(name, args, { input, timeout = 60000, env } = {}) {
+  const bin = which(name) || name;
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
+    const line = [`"${bin}"`, ...args.map((a) => (a === '' ? '""' : /^[\w.:=\/-]+$/.test(a) ? a : `"${a}"`))].join(' ');
+    const r = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], {
+      input, encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: true,
+      env: { ...process.env, DIFFDOJO_CHILD: '1', ...(env || {}) }, maxBuffer: 32 * 1024 * 1024,
+    });
+    return { code: r.status === null ? -1 : r.status, stdout: r.stdout || '', stderr: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
+  }
+  return run(bin, args, { input, timeout, env });
+}
+
 /** Run a user-configured shell command (only ever the configured test/lint command). */
 function runShell(command, opts = {}) {
   const env = { ...process.env, DIFFDOJO_CHILD: '1', ...(opts.env || {}) };
@@ -245,7 +264,7 @@ function dayKey(d = new Date()) {
 }
 
 module.exports = {
-  cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, findGitRoot, shadowGitDir, isEnabled, autoEnable,
+  runTool, cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, findGitRoot, shadowGitDir, isEnabled, autoEnable,
   readJson, writeJson, log, run, runShell, which, readStdin, nowIso, slug,
   shuffle, pick, rng, dayKey,
 };

@@ -128,6 +128,20 @@ test('every enemy has ASCII art in the scene renderer', async () => {
   assert.notDeepStrictEqual(scene.art('evil', 0), scene.art('evil', 1), 'Evil Claude turns while idle')
 })
 
+test('every trophy has its own ASCII art, rows of one width', async () => {
+  const scene = await require('../src/battle-term').loadScene();
+  const seen = new Set();
+  for (const id of Object.keys(require('../src/rewards').TROPHIES)) {
+    assert.ok(scene.TROPHY_ART[id], `art for ${id}`);
+    const rows = scene.trophyArt(id);
+    assert.strictEqual(new Set(rows.map((r) => [...r].length)).size, 1, `${id}: rows line up`);
+    assert.ok(rows.every((r) => [...r].length <= 30), `${id}: fits the pane`);
+    const key = rows.join('\n');
+    assert.ok(!seen.has(key), `${id}: its own picture`);
+    seen.add(key);
+  }
+});
+
 test('the terminal game plays a full exchange: intro, question, hit, next enemy', async () => {
   const term = require('../src/battle-term');
   const scene = await term.loadScene();
@@ -212,6 +226,24 @@ test('No Mercy: no health bars, one wrong answer loses, Claude finishing the pro
   battle.start('easy');
   assert.ok(!battle.noMercyActive());
   assert.strictEqual(battle.intercept(db, { correct: true }), null);
+});
+
+test('Bug Hunter: FREE CHINESE LLM breaks one of Claude\'s functions; the right fix strikes it', async () => {
+  battle.start('bughunter');
+  assert.strictEqual(battle.view().enemy.name, 'FREE CHINESE LLM');
+  // Before Claude has written anything here, the demo project's functions are used.
+  const r = battle.nextQuestion(db, { repoId: null, rnd: () => 0.3 });
+  assert.ok(r.question, JSON.stringify(r));
+  assert.strictEqual(r.question.type, 'bug_fix');
+  assert.match(r.question.prompt, /FREE CHINESE LLM "optimised" Claude's `\w+`.* slipped a bug into line \d+\. Which line fixes it\?/);
+  assert.strictEqual(Object.keys(r.question.choices).length, 4);
+  const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', r.question.id));
+  assert.strictEqual(q.status, 'battle', 'bug-fix questions stay out of the plain quiz queue');
+  const pending = battle.load().pending;
+  const hit = await battle.answer(db, pending.correctKey, { cfg: {}, root: null });
+  assert.strictEqual(hit.correct, true);
+  assert.ok(hit.damage > 0);
+  assert.match(hit.explanation, /was changed from/);
 });
 
 test('the terminal game: RUN ends the battle and goes back to the menu', async () => {

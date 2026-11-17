@@ -56,3 +56,34 @@ test('the CLI api answers in a folder without git', () => {
   assert.strictEqual(s.enabled, true);
   assert.strictEqual(s.battleAllowed, true);
 });
+
+test('scores: XP and accuracy across every project, current one marked', async () => {
+  const grader = require('../src/grader');
+  const a = plainFolder({ 'a.py': 'x = 1\n' });
+  const b = plainFolder({ 'b.py': 'y = 2\n' });
+  const db = store.open();
+  const ask = async (dir, right) => {
+    const repoId = util.repoId(dir);
+    store.ensureRepo(db, dir, repoId, true);
+    const id = store.insertQuestion(db, {
+      repo_id: repoId, family: 'questionnaire', type: 'pack', format: 'choice', grading: 'verified', xp: 10, difficulty: 'easy',
+      prompt: `Which, in ${path.basename(dir)}, try ${right}?`, choices: { a: 'one', b: 'two' }, answer: 'a', track: 'python',
+    });
+    await grader.answer(db, store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', id)), right ? 'a' : 'b', { mode: 'normal' });
+  };
+  await ask(a, true);
+  await ask(a, false);
+  await ask(b, true);
+  const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'diffdojo'), 'api', 'scores'], { cwd: a, encoding: 'utf8', env: process.env });
+  const s = JSON.parse(r.stdout.trim().split('\n').pop());
+  const pa = s.projects.find((p) => p.path === a);
+  const pb = s.projects.find((p) => p.path === b);
+  assert.ok(pa && pb, JSON.stringify(s.projects));
+  assert.strictEqual(pa.here, true);
+  assert.strictEqual(pb.here, false);
+  assert.strictEqual(pa.answered, 2);
+  assert.strictEqual(pa.accuracy, 50);
+  assert.strictEqual(pb.accuracy, 100);
+  assert.ok(pa.xp > 0 && pb.xp > 0);
+  assert.strictEqual(s.projects.reduce((n, p) => n + p.xp, 0), s.xp, 'the rows add up to the total');
+});
