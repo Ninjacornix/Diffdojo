@@ -55,7 +55,7 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 - **Special fights**: **No Mercy** (SKYNET, below) and **Bug Hunter**.
 - **Prepare**: pick a topic (or type your own, like "Rust lifetimes") and Claude writes questions on it before you fight; without Claude they come from the question packs. They come up in your next fights.
 - **Scores**: your score across all your projects: total XP, belt, streak, XP today, answers and accuracy, then a row per project (XP, answers, % right), with the project you're in marked. **Share my score** publishes it as a GitHub Gist (below).
-- **Achievements**: your belt, XP and streak, belts per topic, and every trophy, earned or not.
+- **Achievements**: your belt, XP and streak, belts per topic, and every trophy, earned or not. Open a trophy to see its ASCII art (in colour once you've earned it).
 - **Settings**: which Claude model writes your questions (Haiku 5.5, the cheapest and the default; Sonnet 5.5; Opus 5.5), how much effort it puts in (low, medium, high), and whether Claude writes questions at all.
 
 After an enemy's intro the fight starts by itself; Enter skips the wait.

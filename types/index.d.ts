@@ -137,6 +137,7 @@ declare module 'claude-code' {
       gateAsk: Shaped<GateAsk | null>
       menuTab: string
       achievements: Shaped<Achievements | null>
+      trophyView: string
       scores: Shaped<Scores | null>
       sharePreview: string
       sharedAt: string

@@ -7,7 +7,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
 import type { Achievements, Scores, BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk, ModelSettings } from '../types'
-import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
+import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap, trophyArt } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
 
 type Engine = EngineInterface
@@ -32,6 +32,8 @@ const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, fals
 // The menu's screens, and what they show.
 const menuTab = atom({ plugin: 'diffdojo', key: 'menuTab' } as const, 'main')
 const achievements = atom({ plugin: 'diffdojo', key: 'achievements' } as const, null, { shape: 'ach-1' })
+// The trophy opened on the Achievements screen ('' = the list).
+const trophyView = atom({ plugin: 'diffdojo', key: 'trophyView' } as const, '')
 const scores = atom({ plugin: 'diffdojo', key: 'scores' } as const, null, { shape: 'sco-1' })
 // Sharing the score card: the preview being confirmed, and where it was shared.
 const sharePreview = atom({ plugin: 'diffdojo', key: 'sharePreview' } as const, '')
@@ -309,6 +311,7 @@ async function setConfig($: Engine, key: string, value: string) {
 
 /** Go to a menu screen, loading what it shows. */
 async function goTab($: Engine, tab: string) {
+  await update($, trophyView, () => '')
   if (tab === 'scores') {
     const r = await cli($, ['scores'])
     await update($, scores, () => (r.error ? null : (r as unknown as Scores)))
@@ -620,17 +623,48 @@ export function registerBattle(on: On) {
 
       if (tab === 'achievements') {
         const ach = await read($, achievements)
+        const open = await read($, trophyView)
+        const trophy = ach && open ? ach.trophies.find(x => x.id === open) : null
+        if (ach && trophy) {
+          // One trophy, with its picture: bright when earned, grey while locked.
+          const [title, how] = trophy.name.split(' — ')
+          return titled(
+            trophy.earned ? `Trophy: ${title}` : `Locked: ${title}`,
+            <Box flexDirection="column">
+              {draw(trophyArt(trophy.id).map(r => pad(join([], [{ t: r, c: trophy.earned ? PALETTE.low : PALETTE.mid, b: trophy.earned }], 6), W)))}
+              {rowsOf(
+                wrap(
+                  [
+                    how ? `${how[0].toUpperCase()}${how.slice(1)}.` : '',
+                    trophy.earned ? `Earned ${trophy.at ? trophy.at.slice(0, 10) : ''}.` : 'Not earned yet.',
+                  ].filter(Boolean),
+                  W - 6,
+                ).map(text => ({ text, dim: !trophy.earned })),
+              )}
+              <Select key="trophy" autoFocus options={[{ value: 'list', label: '< Back to achievements' }]} onSelect={() => update($, trophyView, () => '')} />
+            </Box>,
+          )
+        }
         const got = ach ? ach.trophies.filter(x => x.earned) : []
         const rows: BoxRow[] = !ach
           ? [{ text: 'Loading...' }]
           : [
-              { text: `Belt: ${ach.belt.toUpperCase()}  ·  ${ach.xp} XP  ·  streak ${ach.streak} day${ach.streak === 1 ? '' : 's'}` },
+              { text: `Belt: ${ach.belt.toUpperCase()}  ·  ${ach.xp} XP  ·  streak ${ach.streak} day${ach.streak === 1 ? '' : 's'}  ·  trophies: ${got.length} of ${ach.trophies.length}` },
               ...ach.tracks.slice(0, 4).map(x => ({ text: `  ${x.name}: ${x.belt}, ${x.xp} XP${x.nextAt ? ` (next belt at ${x.nextAt})` : ''}`, dim: true })),
-              { text: '' },
-              { text: `Trophies: ${got.length} of ${ach.trophies.length}` },
-              ...[...got, ...ach.trophies.filter(x => !x.earned)].map(x => ({ text: `  ${x.earned ? '[x]' : '[ ]'} ${x.name}`, dim: !x.earned })),
             ]
-        return titled('Achievements', <Box flexDirection="column">{rowsOf(rows.flatMap(r => wrap([r.text], W - 6).map(text => ({ ...r, text }))))}<Select key="back" autoFocus options={[back]} onSelect={goBack} /></Box>)
+        const list = ach ? [...got, ...ach.trophies.filter(x => !x.earned)] : []
+        return titled(
+          'Achievements: pick a trophy to see it',
+          <Box flexDirection="column">
+            {rowsOf(rows.flatMap(r => wrap([r.text], W - 6).map(text => ({ ...r, text }))))}
+            <Select
+              key="trophies"
+              autoFocus
+              options={[...list.map(x => ({ value: x.id, label: `${x.earned ? '[x]' : '[ ]'} ${x.name.split(' — ')[0]}` })), back]}
+              onSelect={v => (v === 'back' ? goBack() : update($, trophyView, () => v))}
+            />
+          </Box>,
+        )
       }
 
       if (tab === 'settings') {

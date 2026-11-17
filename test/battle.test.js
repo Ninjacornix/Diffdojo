@@ -128,6 +128,20 @@ test('every enemy has ASCII art in the scene renderer', async () => {
   assert.notDeepStrictEqual(scene.art('evil', 0), scene.art('evil', 1), 'Evil Claude turns while idle')
 })
 
+test('every trophy has its own ASCII art, rows of one width', async () => {
+  const scene = await require('../src/battle-term').loadScene();
+  const seen = new Set();
+  for (const id of Object.keys(require('../src/rewards').TROPHIES)) {
+    assert.ok(scene.TROPHY_ART[id], `art for ${id}`);
+    const rows = scene.trophyArt(id);
+    assert.strictEqual(new Set(rows.map((r) => [...r].length)).size, 1, `${id}: rows line up`);
+    assert.ok(rows.every((r) => [...r].length <= 30), `${id}: fits the pane`);
+    const key = rows.join('\n');
+    assert.ok(!seen.has(key), `${id}: its own picture`);
+    seen.add(key);
+  }
+});
+
 test('the terminal game plays a full exchange: intro, question, hit, next enemy', async () => {
   const term = require('../src/battle-term');
   const scene = await term.loadScene();
