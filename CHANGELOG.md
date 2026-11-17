@@ -1,18 +1,26 @@
 # Changelog
 
+## 0.2.1
+
+### Added
+- **No Mercy in the battle menu**: a last row in the menu opens SKYNET's screen, where No Mercy is switched on and off.
+- **RUN** in every fight (in Claude Code and `diffdojo battle`): ends the battle and goes back to the menu.
+- **Health is a token budget**: the bars are TOKENS bars, damage is in tokens, and each hit spills token-like words (`▁def`, `await`, `##ing`, `</s>`...) out of the bar of whoever was hit.
+- SKYNET has its own sprite on No Mercy's screen in the battle menu.
+
+### Fixed
+- Working-tree snapshots keep the index's timestamp, so a same-size edit made in the same second as the index is no longer missed (seen on macOS).
+- The version is bumped so `/plugin update` picks up these changes.
+
 ## 0.2.0
 
 ### Added
 - **Claude writes the questions.** After each change, a cheap model (`claude-haiku-5-5`) writes technical questions about that change in your project with `claude -p` on your own plan, in the background; a blind second call checks each one. They come first in the queue and in battles. On by default: `diffdojo config set model.enabled false` keeps a project fully local. The first session in Claude Code says this once.
-- **No Mercy mode** (battle menu or `/nomercy on`): before each of Claude's edits is applied, its boss SKYNET asks you a question about that exact change. Right: the edit goes through. Wrong or dismissed: the edit is rejected and Claude's turn is stopped.
+- **No Mercy mode** (`/nomercy on`): before each of Claude's edits is applied, its boss SKYNET asks you a question about that exact change. Right: the edit goes through. Wrong or dismissed: the edit is rejected and Claude's turn is stopped.
 - **Every project folder, git or not.** Folders without git are tracked through a private shadow repository in `~/.diffdojo/<id>/shadow.git`, so you get questions about Claude's changes there too, and nothing is written into the folder. Home folders, drive roots and folders with more than 20,000 files are skipped.
 - 19 new JavaScript/TypeScript questions (parseInt with map, BigInt, freeze, JSON round trips, AbortSignal, ESM, `satisfies`, `as const`, exhaustive `never` checks and more).
 - CI on Linux, macOS and Windows (Node 22 and 24), plus the in-app UI tests.
 - `npm run test:ui` for the in-app UI tests.
-
-- **RUN** in every fight (in Claude Code and `diffdojo battle`): ends the battle and goes back to the menu.
-- **Health is a token budget**: the bars are TOKENS bars, damage is in tokens, and each hit spills token-like words (`▁def`, `await`, `##ing`, `</s>`...) out of the bar of whoever was hit.
-- SKYNET has its own sprite on No Mercy's screen in the battle menu.
 
 ### Fixed
 - **Battle mode outside git repositories.** In a folder that wasn't a git repo, picking a mode sent you straight back to the menu, and sending a prompt didn't start a fight. Battles (and everything else) now work in any folder.
