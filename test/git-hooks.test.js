@@ -23,6 +23,24 @@ test('snapshot captures untracked files without touching the real index', () => 
   assert.ok(g(repo, 'status', '--porcelain').includes('?? new.py'), 'new file still untracked');
 });
 
+test('a same-size edit in the same second as the index is still seen (racy git)', () => {
+  // As on macOS: git compares whole-second mtimes and sizes only. The file and the
+  // index share a timestamp, so git must re-read the file rather than trust its stat.
+  const repo = makeRepo({ 'a.py': 'x = 1\n' });
+  g(repo, 'config', 'core.checkStat', 'minimal');
+  g(repo, 'config', 'core.trustctime', 'false');
+  const t0 = new Date(Math.floor(Date.now() / 1000 - 100) * 1000);
+  const file = path.join(repo, 'a.py');
+  fs.utimesSync(file, t0, t0);
+  g(repo, 'add', '-A'); // the index records a.py at t0
+  fs.utimesSync(path.join(repo, '.git', 'index'), t0, t0); // ...and was written in that same second
+  const base = git.snapshot(repo);
+  write(repo, 'a.py', 'x = 2\n'); // same size
+  fs.utimesSync(file, t0, t0); // same second
+  const now = git.snapshot(repo);
+  assert.deepStrictEqual(git.changedFiles(repo, base, now), ['a.py']);
+});
+
 test('diff across commits and uncommitted changes, parsed with added line numbers', () => {
   const repo = makeRepo({ 'm.py': 'a = 1\nb = 2\n' });
   const base = git.snapshot(repo);
