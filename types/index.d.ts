@@ -109,6 +109,19 @@ export type Achievements = {
   battle: { wins: Record<string, number>; best: Record<string, number> }
 }
 
+/** `diffdojo api scores`: totals across every project, then each project. */
+export type Scores = {
+  belt: string
+  xp: number
+  xpToday: number
+  streak: number
+  answered: number
+  accuracy: number | null
+  trophies: number
+  projects: { name: string; path: string | null; xp: number; answered: number | null; accuracy: number | null; last: string | null; here: boolean }[]
+  battle: { wins: Record<string, number>; best: Record<string, number> }
+}
+
 /** `diffdojo api settings`: which model writes the questions, and how hard it thinks. */
 export type ModelSettings = { enabled: boolean; model: string | null; effort: string; perHour: number | null }
 
@@ -124,6 +137,7 @@ declare module 'claude-code' {
       gateAsk: Shaped<GateAsk | null>
       menuTab: string
       achievements: Shaped<Achievements | null>
+      scores: Shaped<Scores | null>
       modelSettings: Shaped<ModelSettings | null>
       prepareTopics: string[]
       preparing: string

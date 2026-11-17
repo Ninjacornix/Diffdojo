@@ -369,7 +369,7 @@ const commands = {
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
-    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'settings', 'topics', 'prepare'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
+    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'scores', 'settings', 'topics', 'prepare'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
@@ -397,6 +397,33 @@ const commands = {
         trophies: Object.entries(rewards.TROPHIES).map(([id, name]) => ({ id, name, earned: earned.has(id), at: earned.get(id) || null })),
         tracks: st.tracks.map((t) => ({ name: t.name, belt: t.belt, xp: t.xp, nextAt: t.nextAt })),
         battle: { wins: b.wins || {}, best: b.best || {} },
+      });
+    }
+    if (sub === 'scores') {
+      // The battle menu's Scores screen: totals across every project, then each project.
+      const st = stats.compute(d, {});
+      const acc = (rid) => {
+        const r = d.get(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(a.correct), 0) AS ok FROM answers a JOIN questions q ON q.id = a.question_id
+           WHERE a.correct IS NOT NULL AND ${rid === null ? 'q.repo_id IS NULL' : 'q.repo_id = ?'}`, ...(rid === null ? [] : [rid]));
+        return r.n ? Math.round((100 * r.ok) / r.n) : null;
+      };
+      const all = d.get('SELECT COUNT(*) AS n, COALESCE(SUM(correct), 0) AS ok FROM answers WHERE correct IS NOT NULL');
+      const projects = d.all(
+        `SELECT r.id, r.path,
+          (SELECT COALESCE(SUM(amount), 0) FROM xp_events x WHERE x.repo_id = r.id) AS xp,
+          (SELECT COUNT(*) FROM answers a JOIN questions q ON q.id = a.question_id WHERE q.repo_id = r.id AND a.correct IS NOT NULL) AS answered,
+          (SELECT MAX(a.answered_at) FROM answers a JOIN questions q ON q.id = a.question_id WHERE q.repo_id = r.id) AS last
+         FROM repos r ORDER BY xp DESC, answered DESC`,
+      ).map((p) => ({ name: path.basename(p.path || '') || p.id, path: p.path, xp: p.xp, answered: p.answered, accuracy: acc(p.id), last: p.last, here: p.id === repoId }));
+      // Whatever the listed projects don't account for (battles outside a project, removed projects).
+      const loose = st.totalXp - projects.reduce((n, p) => n + p.xp, 0);
+      if (loose) projects.push({ name: '(battles and quizzes outside a project)', path: null, xp: loose, answered: null, accuracy: acc(null), last: null, here: false });
+      const b = require('./battle').load();
+      return out({
+        belt: st.overallBelt, xp: st.totalXp, xpToday: st.xpToday, streak: st.streak,
+        answered: all.n, accuracy: all.n ? Math.round((100 * all.ok) / all.n) : null,
+        trophies: st.trophies.length, projects, battle: { wins: b.wins || {}, best: b.best || {} },
       });
     }
     if (sub === 'settings') {

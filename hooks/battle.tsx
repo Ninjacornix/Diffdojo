@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
-import type { Achievements, BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk, ModelSettings } from '../types'
+import type { Achievements, Scores, BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk, ModelSettings } from '../types'
 import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
 
@@ -32,6 +32,7 @@ const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, fals
 // The menu's screens, and what they show.
 const menuTab = atom({ plugin: 'diffdojo', key: 'menuTab' } as const, 'main')
 const achievements = atom({ plugin: 'diffdojo', key: 'achievements' } as const, null, { shape: 'ach-1' })
+const scores = atom({ plugin: 'diffdojo', key: 'scores' } as const, null, { shape: 'sco-1' })
 const settings = atom({ plugin: 'diffdojo', key: 'modelSettings' } as const, null, { shape: 'set-1' })
 const topics = atom({ plugin: 'diffdojo', key: 'prepareTopics' } as const, [] as string[])
 const preparing = atom({ plugin: 'diffdojo', key: 'preparing' } as const, '')
@@ -304,6 +305,10 @@ async function setConfig($: Engine, key: string, value: string) {
 
 /** Go to a menu screen, loading what it shows. */
 async function goTab($: Engine, tab: string) {
+  if (tab === 'scores') {
+    const r = await cli($, ['scores'])
+    await update($, scores, () => (r.error ? null : (r as unknown as Scores)))
+  }
   if (tab === 'achievements') {
     const r = await cli($, ['achievements'])
     await update($, achievements, () => (r.error ? null : (r as unknown as Achievements)))
@@ -353,6 +358,7 @@ const TABS: [string, string][] = [
   ['ladders', 'FIGHT'],
   ['special', 'SPECIAL'],
   ['prepare', 'PREPARE'],
+  ['scores', 'SCORES'],
   ['achievements', 'ACHIEVEMENTS'],
   ['settings', 'SETTINGS'],
 ]
@@ -519,6 +525,28 @@ export function registerBattle(on: On) {
           />,
         )
 
+      if (tab === 'scores') {
+        const sc = await read($, scores)
+        const num = (n: number) => n.toLocaleString('en-US')
+        const pct = (n: number | null) => (n === null ? '  -' : `${String(n).padStart(3)}%`)
+        const nameW = Math.max(12, Math.min(28, W - 40))
+        const rows: BoxRow[] = !sc
+          ? [{ text: 'Loading...' }]
+          : [
+              { text: `All projects: ${num(sc.xp)} XP  ·  ${sc.belt.toUpperCase()} belt  ·  streak ${sc.streak} day${sc.streak === 1 ? '' : 's'}  ·  today +${num(sc.xpToday)} XP` },
+              { text: `${num(sc.answered)} answers, ${sc.accuracy === null ? 'none graded yet' : `${sc.accuracy}% right`}  ·  ${sc.trophies} troph${sc.trophies === 1 ? 'y' : 'ies'}` },
+              { text: '' },
+              { text: `${'Project'.padEnd(nameW)}  ${'XP'.padStart(7)}  ${'answers'.padStart(7)}  right`, dim: true },
+              ...sc.projects.slice(0, 14).map(p => {
+                const n = (p.here ? '> ' : '  ') + p.name
+                return { text: `${(n.length > nameW ? n.slice(0, nameW - 1) + '…' : n).padEnd(nameW)}  ${num(p.xp).padStart(7)}  ${(p.answered === null ? '-' : num(p.answered)).padStart(7)}  ${pct(p.accuracy)}` }
+              }),
+              ...(sc.projects.length > 14 ? [{ text: `  ... and ${sc.projects.length - 14} more (diffdojo stats lists them all)`, dim: true }] : []),
+              ...(sc.projects.length ? [] : [{ text: '  No projects yet: answer a question about Claude\'s code to start.', dim: true }]),
+            ]
+        return titled('Scores across all your projects', <Box flexDirection="column">{rowsOf(rows)}<Select key="back" autoFocus options={[back]} onSelect={goBack} /></Box>)
+      }
+
       if (tab === 'achievements') {
         const ach = await read($, achievements)
         const got = ach ? ach.trophies.filter(x => x.earned) : []
@@ -597,6 +625,7 @@ export function registerBattle(on: On) {
               { value: 'ladders', label: 'Fight           Easy, Medium, Hard, Professional, Endless' },
               { value: 'special', label: 'Special fights  No Mercy (SKYNET), Bug Hunter (FREE CHINESE LLM)' },
               { value: 'prepare', label: 'Prepare         questions on a topic, before you fight' },
+              { value: 'scores', label: 'Scores          XP and accuracy across all your projects' },
               { value: 'achievements', label: 'Achievements    trophies, belts and records' },
               { value: 'settings', label: `Settings        model: ${MODELS.find(([v]) => v === m?.model)?.[1] || m?.model || '...'}, effort: ${m?.effort || 'low'}` },
             ]}

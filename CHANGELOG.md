@@ -5,11 +5,12 @@
 ### Added
 - **Bug Hunter**, a special fight against FREE CHINESE LLM: it slips a bug into a function Claude wrote and you pick the line that fixes it. Bugs come from Claude's recent code (or the demo project); Python/JS bugs are run first to make sure they change the result. Only the question has the bug. Trophy: *Firewall*. Also in `diffdojo battle`.
 - **Prepare questions on a topic** (battle menu): pick a suggested topic or type your own; Claude writes questions on it in advance (checked blind like the rest), or the packs supply them. They come up in your next fights.
+- **Scores** screen: one score across all your projects (XP, belt, streak, XP today, answers, accuracy) and a row per project with its XP, answers and accuracy (`diffdojo api scores`).
 - **Achievements** screen: belt, XP, streak, belts per topic, and all trophies, earned or not.
 - **Settings** screen: the model that writes your questions (Haiku 5.5 / Sonnet 5.5 / Opus 5.5), its effort (low / medium / high, passed as `--effort`), and whether Claude writes questions at all. New setting `model.effort` (default `low`).
 
 ### Changed
-- **The battle menu is organised into screens**: Fight, Special fights, Prepare, Achievements, Settings, with a tab bar showing where you are and Back on each.
+- **The battle menu is organised into screens**: Fight, Special fights, Prepare, Scores, Achievements, Settings, with a tab bar showing where you are and Back on each.
 
 ### Fixed
 - **Starting a fight looked stuck**: after "... wants to fight!" the only control was a blinking marker that showed as an empty grey box. The fight now starts by itself once the enemy is in place (Enter skips the wait), and Continue is labelled.

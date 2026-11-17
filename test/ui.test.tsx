@@ -157,6 +157,9 @@ function fakeBattle(on: any) {
       body = { belt: 'yellow', xp: 210, streak: 3, tracks: [{ name: 'C++', belt: 'yellow', xp: 210, nextAt: 400 }], battle: { wins: {}, best: {} },
         trophies: [{ id: 'skynet', name: 'Judgment Averted — defeated SKYNET in No Mercy', earned: true, at: '2026-11-17' }, { id: 'evil-claude', name: 'Evil Claude Defeated', earned: false, at: null }] }
     if (args[0] === 'settings') body = { enabled: true, model: 'claude-haiku-5-5', effort: 'low', perHour: 30 }
+    if (args[0] === 'scores')
+      body = { belt: 'yellow', xp: 1240, xpToday: 60, streak: 4, answered: 312, accuracy: 78, trophies: 3, battle: { wins: {}, best: {} },
+        projects: [{ name: 'sranja', path: 'C:/Users/m/sranja', xp: 900, answered: 200, accuracy: 81, last: null, here: true }, { name: 'Diffdojo', path: '/x/Diffdojo', xp: 340, answered: 112, accuracy: 72, last: null, here: false }] }
     if (args[0] === 'topics') body = { topics: ['C++', 'epoll and non-blocking sockets'] }
     if (args[0] === 'prepare') body = { added: 6, via: 'claude', topic: args.slice(1).join(' ') }
     if (args[0] === 'battle-answer')
@@ -608,5 +611,19 @@ test('menu: Bug Hunter starts the fight against FREE CHINESE LLM', async ($, on)
   expect(await ui.find({ type: 'Text', text: /\[SPECIAL\]/ })).toBeTruthy()
   await ui.select({ key: 'mode', value: 'bughunter' })
   expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'bughunter')).toBe(true)
+  await ui.unmount()
+})
+
+test('menu: Scores tracks XP and accuracy across every project', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'scores' })
+  expect(calls.some(c => c[0] === 'scores')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /\[SCORES\]/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /All projects: 1,240 XP/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /312 answers, 78% right/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /> sranja .* 900 .* 200 .* 81%/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /  Diffdojo .* 340/ })).toBeTruthy()
   await ui.unmount()
 })
