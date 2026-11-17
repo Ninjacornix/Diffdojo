@@ -151,10 +151,16 @@ function view(s = load()) {
   };
 }
 
-function start(mode) {
-  if (!MODES[mode]) throw new Error(`unknown mode ${mode} (easy, medium, hard, professional, endless)`);
+/**
+ * Start a fight. A No Mercy fight belongs to the Claude Code session and the
+ * project it was started in (`owner`), so it can never gate edits anywhere else
+ * or later: see noMercyActive.
+ */
+function start(mode, owner = {}) {
+  if (!MODES[mode]) throw new Error(`unknown mode ${mode} (easy, medium, hard, professional, endless, bughunter, nomercy)`);
   const s = load();
   Object.assign(s, { mode, stage: 0, wave: 1, lives: LIVES, playerHp: PLAYER_MAX, enemyHp: null, pending: null, phase: 'fight', passed: 0 });
+  s.owner = { session: owner.session || null, project: owner.project || null, at: Date.now() };
   s.enemyHp = enemyOf(s).hp;
   return save(s);
 }
@@ -282,8 +288,33 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
 }
 
 /** Is a No Mercy fight on? Then SKYNET intercepts Claude's edits. */
-function noMercyActive(s = load()) {
-  return s.mode === 'nomercy' && s.phase === 'fight';
+// A No Mercy fight older than this has been forgotten about: it ends.
+const NOMERCY_MAX_MS = 3 * 60 * 60 * 1000;
+
+/** Does the fight belong here? Same session, same project, not stale. `ctx` null skips the session/project check. */
+function owned(s, ctx) {
+  const o = s.owner || {};
+  if (!o.at || Date.now() - o.at > NOMERCY_MAX_MS) return false;
+  if (!ctx) return true;
+  if (o.session && o.session !== (ctx.session || null)) return false;
+  if ((o.project || null) !== (ctx.project || null)) return false;
+  return true;
+}
+
+/**
+ * Is a No Mercy fight on *here*? Only in the Claude Code session and project
+ * that started it, and for at most NOMERCY_MAX_MS: a fight left behind (Claude
+ * Code quit, a prompt with no edits) never gates edits elsewhere or later.
+ */
+function noMercyActive(s = load(), ctx = null) {
+  return s.mode === 'nomercy' && s.phase === 'fight' && owned(s, ctx);
+}
+
+/** End a No Mercy fight that doesn't belong here any more (another or a finished session, too old). */
+function endStale(ctx) {
+  const s = load();
+  if (s.mode === 'nomercy' && s.phase === 'fight' && !owned(s, ctx)) return quit();
+  return s;
 }
 
 /**
@@ -291,9 +322,9 @@ function noMercyActive(s = load()) {
  * question about it. Right: the edit goes through. Wrong: you lose the fight
  * (the edit is rejected and Claude stopped elsewhere). Null when no No Mercy fight is on.
  */
-function intercept(db, { correct, xp, explanation, answerText, file: edited, trophies }) {
+function intercept(db, { correct, xp, explanation, answerText, file: edited, trophies }, ctx = null) {
   const s = load();
-  if (!noMercyActive(s)) return null;
+  if (!noMercyActive(s, ctx)) return null;
   const ev = { intercept: true, correct: !!correct, xp: xp || 0, explanation: explanation || null, correctKey: answerText || null, file: edited || null, enemyName: 'SKYNET', playerName: playerName(), trophies: trophies || [] };
   if (correct) s.passed = (s.passed || 0) + 1;
   else {
@@ -309,9 +340,9 @@ function intercept(db, { correct, xp, explanation, answerText, file: edited, tro
  * Claude's turn ended. If it finished on its own (not interrupted) after at
  * least one intercepted edit, every change for the prompt is in: SKYNET falls.
  */
-function turnEnd(db, { reason }) {
+function turnEnd(db, { reason }, ctx = null) {
   const s = load();
-  if (!noMercyActive(s) || reason !== 'answer' || !s.passed) return { victory: false, state: view(s) };
+  if (!noMercyActive(s, ctx) || reason !== 'answer' || !s.passed) return { victory: false, state: view(s) };
   s.phase = 'victory';
   s.wins.nomercy = (s.wins.nomercy || 0) + 1;
   const t = require('./rewards').grant(db, 'skynet', `Claude finished a prompt with ${s.passed} edit(s), every one answered`);
@@ -380,12 +411,12 @@ function exchange(db, s, correct, difficulty, rnd, extra) {
 }
 
 /** After a game over or a victory screen: fight on (same mode, from the start). */
-function resume() {
+function resume(owner = {}) {
   const s = load();
   if (!s.mode) return save(s);
-  if (s.phase === 'victory' || MODES[s.mode].noHealth) return start(s.mode);
+  if (s.phase === 'victory' || MODES[s.mode].noHealth) return start(s.mode, owner);
   s.phase = 'fight';
   return save(s);
 }
 
-module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, intercept, turnEnd, noMercyActive, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };
+module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, intercept, turnEnd, noMercyActive, endStale, NOMERCY_MAX_MS, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };

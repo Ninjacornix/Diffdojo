@@ -17,6 +17,7 @@ guard('on-edit', () => {
   const { load } = require('../src/config');
   const { matchesAny } = require('../src/glob');
   const cfg = load(c.repoId);
+  if (process.env.DIFFDOJO_DOCTOR === '1') return; // diffdojo doctor timing the hook: measure, don't record
   const lines = [];
   for (const p of [...new Set(paths)]) {
     const abs = path.resolve(c.input.cwd || c.root, p);

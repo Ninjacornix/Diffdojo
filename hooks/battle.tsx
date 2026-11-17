@@ -86,9 +86,17 @@ export async function cancelPaneAsk($: Engine) {
 
 type Api = Record<string, any>
 
+// This Claude Code session's id: a No Mercy fight belongs to the session that started it.
+let sessionId = ''
+
+/** Tell the CLI which session is asking (see src/battle.js noMercyActive). */
+export function sessionEnv(): Record<string, string> {
+  return sessionId ? { DIFFDOJO_SESSION: sessionId } : {}
+}
+
 async function cli($: Engine, args: string[]): Promise<Api> {
   try {
-    const r = await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'api', ...args], { timeoutMs: 300000 })
+    const r = await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'api', ...args], { timeoutMs: 300000, env: sessionEnv() })
     return JSON.parse(r.stdout.trim().split('\n').pop() || '{}') as Api
   } catch (err) {
     $.ui.log(`diffdojo battle: ${String(err)}`, { to: 'debug' })
@@ -404,6 +412,11 @@ const TABS: [string, string][] = [
 
 /** Called from the plugin's one session.start hook. */
 export async function battleSessionStart($: Engine) {
+  try {
+    sessionId = await $.session.id()
+  } catch {
+    sessionId = ''
+  }
   void (async () => {
     const r = await cli($, ['settings'])
     if (!r.error) await update($, settings, () => r as unknown as ModelSettings)

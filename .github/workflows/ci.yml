@@ -17,7 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: ['22', '24']
+        # The oldest supported Node (package.json engines) and the current ones.
+        node: ['22.18.0', '22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

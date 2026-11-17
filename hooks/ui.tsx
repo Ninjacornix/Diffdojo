@@ -41,9 +41,17 @@ let poll: { cancel: () => void } | null = null
 let lastQueued = -1
 
 
+// Said once per session when Node is too old for DiffDojo (bin/diffdojo checks).
+let toldNodeTooOld = false
+
 async function api($: Engine, args: string[]): Promise<Api> {
   try {
     const r = await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'api', ...args], { timeoutMs: 300000 })
+    if (/needs Node\.js/.test(r.stderr || '')) {
+      if (!toldNodeTooOld) $.ui.log(`DiffDojo: ${r.stderr.trim()}`)
+      toldNodeTooOld = true
+      return { error: 'node too old' }
+    }
     const line = r.stdout.trim().split('\n').pop() || '{}'
     return JSON.parse(line) as Api
   } catch (err) {

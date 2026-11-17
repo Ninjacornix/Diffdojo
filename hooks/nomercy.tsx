@@ -13,7 +13,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
 import type { BattleResult, BattleView } from '../types'
-import { askInPane, cancelPaneAsk, endFight, openBattle, showIntercept, showSkynet, showTurnEnd } from './battle'
+import { askInPane, cancelPaneAsk, endFight, openBattle, sessionEnv, showIntercept, showSkynet, showTurnEnd } from './battle'
 
 type Engine = EngineInterface
 type Gate = { id?: number; skip?: string; file?: string; prompt?: string; code?: string | null; options?: string[]; error?: string }
@@ -41,7 +41,7 @@ let queue: Promise<unknown> = Promise.resolve()
 
 async function cli($: Engine, args: string[], stdin?: string): Promise<Record<string, any>> {
   try {
-    const r = await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'api', ...args], { timeoutMs: 120000, ...(stdin !== undefined ? { stdin } : {}) })
+    const r = await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'api', ...args], { timeoutMs: 120000, env: sessionEnv(), ...(stdin !== undefined ? { stdin } : {}) })
     return JSON.parse(r.stdout.trim().split('\n').pop() || '{}')
   } catch (err) {
     $.ui.log(`diffdojo no mercy: ${String(err)}`, { to: 'debug' })
@@ -70,6 +70,12 @@ export async function noMercyTurnComplete($: Engine, e: { agentId?: string; reas
 }
 
 export function registerNoMercy(on: On) {
+  // Quitting Claude Code ends a No Mercy fight: it never carries over to another session.
+  on('session.end', async ($, e, next) => {
+    if (await read($, noMercy)) await cli($, ['battle-quit']).catch(() => undefined)
+    return next(e)
+  })
+
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) mainTurn = e.turnId
     return next(e)

@@ -160,7 +160,10 @@ function normalizeOutput(s) {
   return String(s).replace(/\r\n/g, '\n').split('\n').map((l) => l.trim().replace(/\s+/g, ' ')).join('\n').trim();
 }
 
-const LINK_DIRS = ['node_modules', '.venv', 'venv', 'env', '.tox', 'vendor', 'target', 'build', '_deps'];
+// Dependency folders are linked into the temporary copy so tests can run without
+// reinstalling. Build output (build/, target/, _deps/) is not: a test run there
+// would write into the user's real build folder.
+const LINK_DIRS = ['node_modules', '.venv', 'venv', 'env', '.tox', 'vendor'];
 const MAX_COPY_FILES = 20000;
 
 /**

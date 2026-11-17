@@ -41,6 +41,32 @@ test('a same-size edit in the same second as the index is still seen (racy git)'
   assert.deepStrictEqual(git.changedFiles(repo, base, now), ['a.py']);
 });
 
+test('snapshots never write into the repository\'s .git, and leave very large files out', () => {
+  const repo = makeRepo({ 'a.py': 'x = 1\n' });
+  const objects = () => {
+    const out = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(path.join(d, e.name));
+        else out.push(path.join(d, e.name));
+      }
+    };
+    walk(path.join(repo, '.git', 'objects'));
+    return out.sort();
+  };
+  const before = objects();
+  write(repo, 'new.py', 'def f():\n    return 1\n');
+  fs.writeFileSync(path.join(repo, 'model.bin'), Buffer.alloc(git.MAX_FILE_BYTES + 1, 7));
+  const base = git.baseTree(repo);
+  write(repo, 'a.py', 'x = 2\n');
+  const now = git.snapshot(repo);
+  assert.deepStrictEqual(objects(), before, 'no new objects in .git');
+  assert.deepStrictEqual(git.changedFiles(repo, base, now), ['a.py']);
+  assert.strictEqual(git.showFile(repo, now, 'model.bin'), null, 'the large file was left out');
+  assert.match(git.showFile(repo, now, 'new.py'), /return 1/);
+  assert.strictEqual(g(repo, 'fsck', '--no-progress'), '', 'the repository is untouched and healthy');
+});
+
 test('diff across commits and uncommitted changes, parsed with added line numbers', () => {
   const repo = makeRepo({ 'm.py': 'a = 1\nb = 2\n' });
   const base = git.snapshot(repo);

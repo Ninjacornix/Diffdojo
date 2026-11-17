@@ -26,7 +26,11 @@ const QUESTIONS = {
 };
 fs.writeFileSync(path.join(bin, 'claude.js'), `
 const fs = require('fs');
-fs.appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+if (process.env.FAKE_REJECT && process.argv.includes(process.env.FAKE_REJECT)) {
+  process.stderr.write("error: unknown option '" + process.env.FAKE_REJECT + "'\\n");
+  process.exit(1);
+}
+fs.appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(process.argv.slice(2).concat(['@cwd', process.cwd()])) + '\\n');
 const input = fs.readFileSync(0, 'utf8');
 const TOPIC = { questions: [
   { question: 'What does EPOLLET change?', choices: { a: 'Nothing', b: 'Edge-triggered: you are told once per change, so read until EAGAIN', c: 'It blocks', d: 'It closes the fd' }, answer: 'b', explanation: 'Edge-triggered.', difficulty: 'medium' },
@@ -76,6 +80,11 @@ test("Claude's questions about the change come first; ones the blind check disag
   for (const a of calls) {
     assert.ok(a.includes('-p'));
     assert.strictEqual(a[a.indexOf('--model') + 1], 'claude-haiku-5-5');
+    // Isolated: not a session in the user's project.
+    for (const f of ['--no-session-persistence', '--strict-mcp-config', '--disable-slash-commands']) assert.ok(a.includes(f), f);
+    assert.strictEqual(a[a.indexOf('--setting-sources') + 1], 'user');
+    const cwd = a[a.indexOf('@cwd') + 1];
+    assert.ok(!cwd.startsWith(repo) && /diffdojo-claude-/.test(cwd), `runs from a temp folder, not the project: ${cwd}`);
   }
   assert.strictEqual(g(repo, 'status', '--porcelain').includes('diffdojo'), false);
 });
@@ -130,4 +139,20 @@ test('Prepare without Claude picks questions on the topic from the packs', () =>
   assert.strictEqual(out.via, 'packs');
   assert.ok(out.added > 0);
   assert.strictEqual(fs.readFileSync(argsLog, 'utf8'), '', 'claude was not called');
+});
+
+test('an older claude CLI that rejects a flag still gets the call, without that flag', async () => {
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ model: { enabled: true } }));
+  fs.writeFileSync(argsLog, '');
+  process.env.FAKE_REJECT = '--disable-slash-commands';
+  try {
+    const db = store.open();
+    const out = await require('../src/model').call(db, config.load(null), 'test', 'Say hi', { type: 'object', additionalProperties: true, required: [], properties: {} });
+    assert.ok(out);
+    const a = JSON.parse(fs.readFileSync(argsLog, 'utf8').trim().split('\n').pop());
+    assert.ok(!a.includes('--disable-slash-commands'));
+    assert.ok(a.includes('--no-session-persistence'));
+  } finally {
+    delete process.env.FAKE_REJECT;
+  }
 });

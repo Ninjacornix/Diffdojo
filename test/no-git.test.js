@@ -87,3 +87,40 @@ test('scores: XP and accuracy across every project, current one marked', async (
   assert.ok(pa.xp > 0 && pb.xp > 0);
   assert.strictEqual(s.projects.reduce((n, p) => n + p.xp, 0), s.xp, 'the rows add up to the total');
 });
+
+test('a No Mercy fight never gates edits in another project, another session, or after it is forgotten', () => {
+  const bin = path.join(__dirname, '..', 'bin', 'diffdojo');
+  const api = (dir, session, ...args) => {
+    const r = spawnSync(process.execPath, [bin, 'api', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, DIFFDOJO_SESSION: session }, input: '' });
+    return JSON.parse(r.stdout.trim().split('\n').pop());
+  };
+  const a = plainFolder({ 'a.py': 'x = 1\n' });
+  const b = plainFolder({ 'b.py': 'y = 1\n' });
+  const edit = JSON.stringify({ tool: 'Write', file_path: 'c.py', content: 'def f(x):\n    if x < 1:\n        return 0\n    return x\n' });
+  const gate = (dir, session) => {
+    const r = spawnSync(process.execPath, [bin, 'api', 'gate'], { cwd: dir, encoding: 'utf8', env: { ...process.env, DIFFDOJO_SESSION: session }, input: edit });
+    return JSON.parse(r.stdout.trim().split('\n').pop());
+  };
+  api(a, 'S1', 'battle-start', 'nomercy');
+  assert.strictEqual(api(a, 'S1', 'status').noMercy, true, 'on where it started');
+  assert.ok(gate(a, 'S1').id, 'gates edits there');
+  // A prompt with no edits, then an interrupted one: still the same session's fight.
+  api(a, 'S1', 'battle-turn-end', 'answer');
+  api(a, 'S1', 'battle-turn-end', 'aborted');
+  assert.strictEqual(api(a, 'S1', 'status').noMercy, true);
+  // Another project, same session: never gated.
+  assert.strictEqual(api(b, 'S1', 'status').noMercy, false);
+  assert.ok(gate(b, 'S1').skip, 'no question in another project');
+  // A later session in the same project: not gated, and the leftover fight ends.
+  assert.ok(gate(a, 'S2').skip, 'no question in another session');
+  api(a, 'S2', 'battle-state');
+  assert.strictEqual(require('../src/battle').load().phase, 'menu', 'the leftover fight is over');
+  assert.strictEqual(api(a, 'S1', 'status').noMercy, false);
+  // A forgotten fight (older than the limit) ends even in its own session.
+  api(a, 'S3', 'battle-start', 'nomercy');
+  const battle = require('../src/battle');
+  const s = battle.load();
+  s.owner.at = Date.now() - battle.NOMERCY_MAX_MS - 1000;
+  battle.save(s);
+  assert.ok(gate(a, 'S3').skip, 'too old: no question');
+});

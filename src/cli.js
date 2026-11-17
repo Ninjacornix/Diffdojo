@@ -391,6 +391,8 @@ const commands = {
     const { root, repoId } = repoContext();
     const enabled = !!(repoId && util.isEnabled(repoId));
     const sub = pos[1] || 'status';
+    // Who is asking: the Claude Code session (set by the plugin's UI) and the project. A No Mercy fight belongs to both.
+    const ctx = { session: process.env.DIFFDOJO_SESSION || null, project: repoId || null };
     // Inside DiffDojo's own `claude -p` (writing questions), the plugin's UI must do nothing.
     if (process.env.DIFFDOJO_CHILD === '1') return out({ enabled: false, battleAllowed: false, battle: false, noMercy: false, queued: 0, question: null, skip: 'DiffDojo child session' });
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
@@ -411,7 +413,7 @@ const commands = {
       // Told once: Claude writes questions from code excerpts (model path, on by default).
       const noticeFile = path.join(util.home(), 'model-notice.json');
       const modelNotice = !!(cfg.model && cfg.model.enabled && enabled && !fs.existsSync(noticeFile));
-      return out({ ...status(), battle: cfg.battle, noMercy: require('./battle').noMercyActive(), modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
+      return out({ ...status(), battle: cfg.battle, noMercy: require('./battle').noMercyActive(undefined, ctx), modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
     }
     if (sub === 'achievements') {
       // The battle menu's Achievements tab: trophies (earned or not), belts, battle records.
@@ -511,7 +513,7 @@ const commands = {
     }
     if (sub === 'gate') {
       // No Mercy: while a fight against SKYNET is on, a question about the edit in the tool call on stdin.
-      if (!require('./battle').noMercyActive()) return out({ skip: 'no No Mercy fight is on' });
+      if (!require('./battle').noMercyActive(undefined, ctx)) return out({ skip: 'no No Mercy fight is on here' });
       if (root && !enabled) return out({ skip: 'DiffDojo is stopped here' });
       let input;
       try {
@@ -529,17 +531,20 @@ const commands = {
     if (sub === 'gate-answer') {
       const r = await require('./gate').answer(d, pos[2], pos.slice(3).join(' '), { cfg: config.load(repoId), root });
       // SKYNET's ability lands in the fight: a right answer hits it, a wrong one costs you tokens.
-      const hit = r.error ? null : require('./battle').intercept(d, r);
+      const hit = r.error ? null : require('./battle').intercept(d, r, ctx);
       return out({ ...r, ...(hit ? { fight: hit } : {}), ...status() });
     }
     if (sub.startsWith('battle')) {
       const battle = require('./battle');
       try {
-        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, noMercy: battle.noMercyActive(), state: battle.view() });
-        if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2])) });
+        if (sub === 'battle-state') {
+          battle.endStale(ctx); // a No Mercy fight from another session or project, or a forgotten one, ends here
+          return out({ ...status(), battle: config.load(repoId).battle, noMercy: battle.noMercyActive(undefined, ctx), state: battle.view() });
+        }
+        if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2], ctx)) });
         if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
-        if (sub === 'battle-resume') return out({ state: battle.view(battle.resume()) });
-        if (sub === 'battle-turn-end') return out(battle.turnEnd(d, { reason: pos[2] }));
+        if (sub === 'battle-resume') return out({ state: battle.view(battle.resume(ctx)) });
+        if (sub === 'battle-turn-end') return out(battle.turnEnd(d, { reason: pos[2] }, ctx));
         if (sub === 'battle-question') return out(battle.nextQuestion(d, { repoId: enabled ? repoId : null }));
         if (sub === 'battle-answer') return out({ ...(await battle.answer(d, pos[2], { cfg: config.load(repoId), root })), ...status() });
       } catch (e) {
@@ -582,7 +587,8 @@ const commands = {
     const lines = [];
     const ok = (b, msg) => lines.push(`${b ? '✓' : '✗'} ${msg}`);
     const major = +process.versions.node.split('.')[0];
-    ok(major >= 22, `Node ${process.versions.node} (22.5+ needed for node:sqlite)`);
+    const minor = +process.versions.node.split('.')[1];
+    ok(major > 22 || (major === 22 && minor >= 18), `Node ${process.versions.node} (22.18+ needed: node:sqlite and the battle screen)`);
     try {
       db();
       ok(true, `SQLite store at ${require('./store').dbPath()}`);
@@ -607,7 +613,8 @@ const commands = {
     // Hook overhead
     const { spawnSync } = require('child_process');
     const t0 = Date.now();
-    spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'on-edit.js')], { input: JSON.stringify({ cwd: process.cwd(), tool_name: 'Edit', tool_input: { file_path: 'x' } }), env: { ...process.env, DIFFDOJO_DOCTOR: '1' } });
+    // A real hook payload, so the hook does its real checks (repo lookup, enabled, config); DIFFDOJO_DOCTOR stops it before it records anything.
+    spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'on-edit.js')], { input: JSON.stringify({ session_id: 'doctor', cwd: process.cwd(), tool_name: 'Edit', tool_input: { file_path: 'x' } }), env: { ...process.env, DIFFDOJO_DOCTOR: '1' } });
     const ms = Date.now() - t0;
     ok(ms < 300, `edit hook round trip ${ms} ms (target < 100 ms of work; includes Node startup)`);
     const packs = require('./packs').load();

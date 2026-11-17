@@ -1,3 +1,10 @@
 #!/usr/bin/env node
 'use strict';
+// DiffDojo needs Node 22.18+: node:sqlite without a flag (22.13) and running the
+// battle's TypeScript scene file without one (22.18). Say so instead of failing oddly.
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error(`DiffDojo needs Node.js 22.18 or newer; this is ${process.versions.node}. Update Node from https://nodejs.org and try again.`);
+  process.exit(1);
+}
 require('../src/cli').main();
