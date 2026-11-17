@@ -46,12 +46,12 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 
 ## No Mercy mode
 
-For when you really want to keep up with Claude: **every edit waits for you.** Before Claude's change reaches the file, DiffDojo asks one question about that exact change, in Claude Code's own question dialog:
+For when you really want to keep up with Claude: **every edit waits for you.** No Mercy's boss, **SKYNET**, stands between Claude and your files. Before Claude's change reaches the file, SKYNET asks you one question about that exact change, in Claude Code's own question dialog:
 
 - *Which line did Claude write here?* The new code with one line hidden, the real line among look-alikes (`<` vs `<=`, swapped names, off-by-one numbers).
 - *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.
 
-**Answer right** and the edit goes through (with XP). **Answer wrong, or close the question,** and the edit is rejected and Claude stops working, so you can look at what it was doing before you let it go on.
+**Answer right**, you beat SKYNET and the edit goes through (with XP). **Answer wrong, or close the question,** SKYNET wins: the edit is rejected and Claude stops working, so you can look at what it was doing before you let it go on.
 
 ```
 /nomercy on     # in Claude Code

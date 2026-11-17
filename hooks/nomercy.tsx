@@ -1,4 +1,7 @@
 // DiffDojo No Mercy: every edit Claude makes waits for one question about that
+// exact change, asked by No Mercy's boss, SKYNET, who stands between Claude and
+// your files.
+//
 // exact change. Answer right and the edit goes through; answer wrong (or close
 // the question) and the edit is rejected and Claude's turn is stopped.
 // The question and its grading come from the CLI (`diffdojo api gate`); the
@@ -14,6 +17,9 @@ type Graded = { correct?: boolean; xp?: number; answerText?: string; explanation
 const noMercy = atom({ plugin: 'diffdojo', key: 'noMercy' } as const, false)
 
 // MultiEdit only exists in some Claude Code versions; a pattern matches it where it does.
+// No Mercy's boss: it guards every edit.
+const BOSS = 'SKYNET'
+
 const GATED = /^(Edit|Write|MultiEdit)$/
 
 // The main loop's running turn, so a wrong answer can stop it (a reload drops it).
@@ -50,7 +56,7 @@ export function registerNoMercy(on: On) {
     $.ui.status(want ? 'DiffDojo: NO MERCY' : undefined)
     return {
       text: want
-        ? 'No Mercy is on: before each of Claude\'s edits you answer a question about it. Right: the edit goes through. Wrong: it is rejected and Claude stops. /nomercy off to end it.'
+        ? `No Mercy is on. ${BOSS} now guards your files: before each of Claude's edits it asks you a question about the change. Right: you beat it and the edit goes through. Wrong: ${BOSS} rejects the edit and Claude stops. /nomercy off to end it.`
         : 'No Mercy is off: Claude\'s edits go through without a question.',
     }
   })
@@ -67,19 +73,20 @@ export function registerNoMercy(on: On) {
       // The person's question, in Claude Code's own question dialog. Closing it counts as a wrong answer.
       let picked = ''
       try {
-        picked = await $.ui.ask(g.code ? `${g.code}\n\n${g.prompt}` : g.prompt!, { options: g.options, header: 'No Mercy' })
+        const intro = `${BOSS} intercepts Claude's edit to ${g.file}!`
+        picked = await $.ui.ask(g.code ? `${intro}\n\n${g.code}\n\n${g.prompt}` : `${intro}\n\n${g.prompt}`, { options: g.options, header: BOSS })
       } catch {
         picked = ''
       }
       const r: Graded = await cli($, ['gate-answer', String(g.id), picked])
 
       if (r.correct) {
-        $.ui.toast(`No Mercy: correct${r.xp ? `  +${r.xp} XP` : ''}. Claude's edit to ${g.file} goes through.`)
+        $.ui.toast(`Correct! ${BOSS} is beaten${r.xp ? `  +${r.xp} XP` : ''}. Claude's edit to ${g.file} goes through.`)
         return next(e)
       }
 
       $.ui.log(
-        `DiffDojo No Mercy: ${picked ? 'wrong answer' : 'no answer'}, so Claude's edit to ${g.file} was rejected and Claude was stopped.` +
+        `DiffDojo No Mercy: ${picked ? 'wrong answer' : 'no answer'}. ${BOSS} wins: Claude's edit to ${g.file} was rejected and Claude was stopped.` +
           (r.answerText ? ` The answer was: ${r.answerText}.` : '') +
           (r.explanation ? ` ${r.explanation}` : ''),
       )
