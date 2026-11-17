@@ -6,6 +6,7 @@
 - **Bug Hunter**, a special fight against FREE CHINESE LLM: it slips a bug into a function Claude wrote and you pick the line that fixes it. Bugs come from Claude's recent code (or the demo project); Python/JS bugs are run first to make sure they change the result. Only the question has the bug. Trophy: *Firewall*. Also in `diffdojo battle`.
 - **Prepare questions on a topic** (battle menu): pick a suggested topic or type your own; Claude writes questions on it in advance (checked blind like the rest), or the packs supply them. They come up in your next fights.
 - **Scores** screen: one score across all your projects (XP, belt, streak, XP today, answers, accuracy) and a row per project with its XP, answers and accuracy (`diffdojo api scores`).
+- **Share your score** as a GitHub Gist on your own account (`diffdojo share`, or Scores → Share my score): shows the exact card first, publishes through the GitHub CLI, numbers only (no code, questions or project names unless `--projects`), updates the same gist next time, `--remove` deletes it.
 - **Achievements** screen: belt, XP, streak, belts per topic, and all trophies, earned or not.
 - **Settings** screen: the model that writes your questions (Haiku 5.5 / Sonnet 5.5 / Opus 5.5), its effort (low / medium / high, passed as `--effort`), and whether Claude writes questions at all. New setting `model.effort` (default `low`).
 

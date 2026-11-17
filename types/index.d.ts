@@ -138,6 +138,9 @@ declare module 'claude-code' {
       menuTab: string
       achievements: Shaped<Achievements | null>
       scores: Shaped<Scores | null>
+      sharePreview: string
+      sharedAt: string
+      sharing: boolean
       modelSettings: Shaped<ModelSettings | null>
       prepareTopics: string[]
       preparing: string

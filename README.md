@@ -54,7 +54,7 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 - **Fight**: the battle ladders (Easy, Medium, Hard, Professional with Evil Claude, Endless).
 - **Special fights**: **No Mercy** (SKYNET, below) and **Bug Hunter**.
 - **Prepare**: pick a topic (or type your own, like "Rust lifetimes") and Claude writes questions on it before you fight; without Claude they come from the question packs. They come up in your next fights.
-- **Scores**: your score across all your projects: total XP, belt, streak, XP today, answers and accuracy, then a row per project (XP, answers, % right), with the project you're in marked.
+- **Scores**: your score across all your projects: total XP, belt, streak, XP today, answers and accuracy, then a row per project (XP, answers, % right), with the project you're in marked. **Share my score** publishes it as a GitHub Gist (below).
 - **Achievements**: your belt, XP and streak, belts per topic, and every trophy, earned or not.
 - **Settings**: which Claude model writes your questions (Haiku 5.5, the cheapest and the default; Sonnet 5.5; Opus 5.5), how much effort it puts in (low, medium, high), and whether Claude writes questions at all.
 
@@ -94,6 +94,8 @@ Correct answers earn XP. XP unlocks **belt exams** — White → Yellow → Oran
 The biggest reward? **Catching a real bug in Claude's code** and proving it with a failing test. That earns a trophy and a saved bug report.
 
 Show it off with `diffdojo badge`, which makes a little SVG badge for your GitHub profile.
+
+**Share your score** (Scores → Share my score, or `diffdojo share`): DiffDojo shows the exact card first, then publishes it as a gist on your own GitHub account, through the [GitHub CLI](https://cli.github.com) (`gh auth login` once). It holds numbers only (XP, belts, streak, accuracy, trophies, battles cleared, how many projects) plus your badge, never code, questions or project names (`--projects` adds names). Sharing again updates the same gist; `diffdojo share --remove` deletes it; `--secret` makes it unlisted. Scores are self-reported.
 
 ---
 
@@ -178,6 +180,7 @@ Questions about a change appear shortly after Claude finishes it; in between, yo
 | `diffdojo exam cpp` | Take your next belt exam in a track |
 | `diffdojo serve` | Quiz in your browser (local only) |
 | `diffdojo badge` | Make a badge for your profile |
+| `diffdojo share` | Publish your score card as a GitHub Gist (shows it first; `--yes` to publish, `--remove` to delete) |
 | `diffdojo doctor` | Check that everything is set up right |
 
 While quizzing: type your answer, or `s` to skip, `z` to snooze, `b` to flag a bad question, `q` to quit.
@@ -191,7 +194,7 @@ Run `diffdojo help` for everything else.
 ## Your data stays yours
 
 - **Your choice where it runs.** It's on in every project folder by default, git or not; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
-- **Stored locally.** Your progress and questions live in `~/.diffdojo/`, never in your repo, never on a server.
+- **Stored locally.** Your progress and questions live in `~/.diffdojo/`, never in your repo, never on a server. Your score leaves your machine only if you share it (a gist on your own GitHub account, numbers only).
 - **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
 - **Stays out of your conversation.** Nothing is ever injected into your chat with Claude; questions are written by a separate background call.
 - **Safe with your code.** Code only ever runs in a temporary copy, and the only project command DiffDojo will run is the test command you gave it. Files like `.env` and keys are skipped, and anything that looks like a secret is filtered out.

@@ -33,6 +33,10 @@ const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, fals
 const menuTab = atom({ plugin: 'diffdojo', key: 'menuTab' } as const, 'main')
 const achievements = atom({ plugin: 'diffdojo', key: 'achievements' } as const, null, { shape: 'ach-1' })
 const scores = atom({ plugin: 'diffdojo', key: 'scores' } as const, null, { shape: 'sco-1' })
+// Sharing the score card: the preview being confirmed, and where it was shared.
+const sharePreview = atom({ plugin: 'diffdojo', key: 'sharePreview' } as const, '')
+const sharedAt = atom({ plugin: 'diffdojo', key: 'sharedAt' } as const, '')
+const sharing = atom({ plugin: 'diffdojo', key: 'sharing' } as const, false)
 const settings = atom({ plugin: 'diffdojo', key: 'modelSettings' } as const, null, { shape: 'set-1' })
 const topics = atom({ plugin: 'diffdojo', key: 'prepareTopics' } as const, [] as string[])
 const preparing = atom({ plugin: 'diffdojo', key: 'preparing' } as const, '')
@@ -308,6 +312,9 @@ async function goTab($: Engine, tab: string) {
   if (tab === 'scores') {
     const r = await cli($, ['scores'])
     await update($, scores, () => (r.error ? null : (r as unknown as Scores)))
+    const p = await cli($, ['share-preview'])
+    await update($, sharedAt, () => (p.shared && p.shared.url ? String(p.shared.url) : ''))
+    await update($, sharePreview, () => '')
   }
   if (tab === 'achievements') {
     const r = await cli($, ['achievements'])
@@ -322,6 +329,35 @@ async function goTab($: Engine, tab: string) {
     await update($, topics, () => (Array.isArray(r.topics) ? (r.topics as string[]) : []))
   }
   await update($, menuTab, () => tab)
+}
+
+/** Scores → Share: show exactly what would be published, then publish on Publish. */
+async function shareStep($: Engine, step: string) {
+  if (step === 'preview') {
+    const p = await cli($, ['share-preview'])
+    await update($, sharePreview, () => (p.text ? String(p.text) : ''))
+    return
+  }
+  if (step === 'cancel') return update($, sharePreview, () => '')
+  if (step === 'remove') {
+    const r = await cli($, ['share-remove'])
+    $.ui.toast(r.removed ? 'Your shared score is deleted.' : `DiffDojo: ${r.error}`, { timeoutMs: 8000 })
+    if (r.removed) await update($, sharedAt, () => '')
+    return
+  }
+  if (await read($, sharing)) return
+  await update($, sharing, () => true)
+  try {
+    const r = await cli($, ['share'])
+    if (r.error) $.ui.toast(`DiffDojo: ${r.error}`, { timeoutMs: 10000 })
+    else {
+      await update($, sharedAt, () => String(r.url))
+      $.ui.toast(`${r.created ? 'Shared' : 'Updated'}: ${r.url}`, { timeoutMs: 10000 })
+    }
+  } finally {
+    await update($, sharing, () => false)
+    await update($, sharePreview, () => '')
+  }
 }
 
 /** Questions written in advance on a topic, for the next fights. */
@@ -544,7 +580,42 @@ export function registerBattle(on: On) {
               ...(sc.projects.length > 14 ? [{ text: `  ... and ${sc.projects.length - 14} more (diffdojo stats lists them all)`, dim: true }] : []),
               ...(sc.projects.length ? [] : [{ text: '  No projects yet: answer a question about Claude\'s code to start.', dim: true }]),
             ]
-        return titled('Scores across all your projects', <Box flexDirection="column">{rowsOf(rows)}<Select key="back" autoFocus options={[back]} onSelect={goBack} /></Box>)
+        const preview = await read($, sharePreview)
+        const url = await read($, sharedAt)
+        if (preview)
+          return titled(
+            'Share your score: this is exactly what will be published',
+            <Box flexDirection="column">
+              {rowsOf(preview.split('\n').filter(l => l.trim()).slice(0, 18).flatMap(l => wrap([l], W - 6)).map(text => ({ text })))}
+              {rowsOf(wrap(['As a public GitHub Gist on your account (through the GitHub CLI, gh), with the same numbers as JSON and your badge. No code, questions or project names.'], W - 6).map(text => ({ text, dim: true })))}
+              <Select
+                key="share"
+                autoFocus
+                options={[
+                  { value: 'publish', label: (await read($, sharing)) ? 'Publishing...' : url ? 'Publish (updates your gist)' : 'Publish' },
+                  { value: 'cancel', label: 'Cancel' },
+                ]}
+                onSelect={v => shareStep($, v)}
+              />
+            </Box>,
+          )
+        if (url) rows.push({ text: '' }, { text: `Shared at ${url}`, dim: true })
+        return titled(
+          'Scores across all your projects',
+          <Box flexDirection="column">
+            {rowsOf(rows)}
+            <Select
+              key="scores"
+              autoFocus
+              options={[
+                { value: 'preview', label: url ? 'Update my shared score (GitHub Gist)' : 'Share my score (GitHub Gist)...' },
+                ...(url ? [{ value: 'remove', label: 'Delete my shared score' }] : []),
+                back,
+              ]}
+              onSelect={v => (v === 'back' ? goBack() : shareStep($, v))}
+            />
+          </Box>,
+        )
       }
 
       if (tab === 'achievements') {

@@ -35,6 +35,9 @@ Progress
   stats [--repo] [--json]         Belts, XP, accuracy, streak, trophies, bugs caught, across all projects (/diffdojo:stats)
   badge [--out <dir>] [--style flat|square]
                                   Write an SVG + Markdown badge (self-reported)
+  share [--yes] [--projects] [--secret] | share --remove
+                                  Put your score card in a GitHub Gist on your account (uses the gh CLI);
+                                  numbers only, no code or project names unless --projects
   report-bug --title "<t>" --test <path> [--file <f> --lines a-b] [--cmd "<cmd>"] [--critique <qid>]
   report-bug --scaffold --file <f> [--function <name>] [--title "<t>"]
                                   Prove a real bug in Claude's code with a failing test (/diffdojo:report-bug)
@@ -280,6 +283,30 @@ const commands = {
     console.log(st.format(s, { color: color(flags) }));
   },
 
+  share({ flags }) {
+    const share = require('./share');
+    if (flags.remove) {
+      const r = share.remove();
+      return console.log(r.removed ? `Deleted your shared score (${r.url}).` : r.error);
+    }
+    const opts = { projects: !!flags.projects, secret: !!flags.secret };
+    if (!flags.yes) {
+      const p = share.preview(db(), opts);
+      console.log('This is what would be published as a GitHub Gist on your account:\n');
+      console.log(p.text.split('\n').map((l) => '  ' + l).join('\n'));
+      console.log(`\n${opts.secret ? 'A secret gist (only people with the link can see it).' : 'A public gist: anyone can see it.'} Plus diffdojo-score.json (the same numbers) and your badge.`);
+      if (p.shared) console.log(`Already shared at ${p.shared.url}: publishing updates it.`);
+      return console.log('Re-run with --yes to publish.');
+    }
+    const r = share.publish(db(), opts);
+    if (r.error) {
+      process.exitCode = 1;
+      return console.log(r.error);
+    }
+    console.log(`${r.created ? 'Shared' : 'Updated'}: ${r.url}`);
+    console.log(`Badge: ${r.badgeUrl}`);
+  },
+
   badge({ flags }) {
     const out = path.resolve(flags.out || '.');
     const r = require('./badge').write(db(), out, { style: flags.style });
@@ -369,7 +396,7 @@ const commands = {
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
-    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'scores', 'settings', 'topics', 'prepare'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
+    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'scores', 'settings', 'topics', 'prepare', 'share', 'share-preview', 'share-remove'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
@@ -426,6 +453,9 @@ const commands = {
         trophies: st.trophies.length, projects, battle: { wins: b.wins || {}, best: b.best || {} },
       });
     }
+    if (sub === 'share-preview') return out(require('./share').preview(d, { projects: pos[2] === 'projects' }));
+    if (sub === 'share') return out(require('./share').publish(d, { projects: pos[2] === 'projects' }));
+    if (sub === 'share-remove') return out(require('./share').remove());
     if (sub === 'settings') {
       const m = config.load(repoId).model || {};
       return out({ enabled: !!m.enabled, model: m.model || null, effort: m.effort || 'low', perHour: m.perHour || null });

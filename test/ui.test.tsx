@@ -161,6 +161,8 @@ function fakeBattle(on: any) {
       body = { belt: 'yellow', xp: 1240, xpToday: 60, streak: 4, answered: 312, accuracy: 78, trophies: 3, battle: { wins: {}, best: {} },
         projects: [{ name: 'sranja', path: 'C:/Users/m/sranja', xp: 900, answered: 200, accuracy: 81, last: null, here: true }, { name: 'Diffdojo', path: '/x/Diffdojo', xp: 340, answered: 112, accuracy: 72, last: null, here: false }] }
     if (args[0] === 'topics') body = { topics: ['C++', 'epoll and non-blocking sockets'] }
+    if (args[0] === 'share-preview') body = { text: '# DiffDojo score\n\n**1,240 XP** · yellow belt\n', shared: null }
+    if (args[0] === 'share') body = { id: 'abc123', url: 'https://gist.github.com/me/abc123', created: true }
     if (args[0] === 'prepare') body = { added: 6, via: 'claude', topic: args.slice(1).join(' ') }
     if (args[0] === 'battle-answer')
       body = {
@@ -625,5 +627,25 @@ test('menu: Scores tracks XP and accuracy across every project', async ($, on) =
   expect(await ui.find({ type: 'Text', text: /312 answers, 78% right/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /> sranja .* 900 .* 200 .* 81%/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /  Diffdojo .* 340/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('menu: Scores → Share shows the card first and publishes only on Publish', async ($, on) => {
+  const calls = fakeBattle(on)
+  const toasts: string[] = []
+  await boot($, on, toasts)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'scores' })
+  await ui.select({ key: 'scores', value: 'preview' })
+  expect(await ui.find({ type: 'Text', text: /exactly what will be published/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /1,240 XP/ })).toBeTruthy()
+  expect(calls.some(c => c[0] === 'share')).toBe(false)
+  await ui.select({ key: 'share', value: 'cancel' })
+  expect(calls.some(c => c[0] === 'share')).toBe(false)
+  await ui.select({ key: 'scores', value: 'preview' })
+  await ui.select({ key: 'share', value: 'publish' })
+  expect(calls.some(c => c[0] === 'share')).toBe(true)
+  expect(toasts.some(t => t.includes('https://gist.github.com/me/abc123'))).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /Shared at https:\/\/gist\.github\.com\/me\/abc123/ })).toBeTruthy()
   await ui.unmount()
 })

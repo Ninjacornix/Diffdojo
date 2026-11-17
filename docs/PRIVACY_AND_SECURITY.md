@@ -23,6 +23,7 @@ Nothing is written into the repository. `<repo-id>` is a hash of the repo's abso
 - **Secret scan** of every excerpt before it's stored or sent to a model: common key and token patterns. Any match drops the excerpt.
 - **Transcript access is limited.** Only the Stop hook reads the transcript, only for enabled repos, only the turn that just ended, and only to extract Claude's explanation text. A setting turns "why" questions off entirely.
 - **Model path on by default.** Claude writes technical questions about each change with `claude -p` on the user's own plan, using a cheap model (`claude-haiku-5-5`), from at most ~160 lines of changed code per batch that passed the deny globs and the secret scan. The first session in Claude Code says so once, with the command to turn it off (`diffdojo config set model.enabled false`, per project or `--global`). At most 30 calls an hour (`model.perHour`).
+- **Sharing is opt-in and numbers only.** `diffdojo share` (or Scores → Share) shows the card, then publishes it as a gist on the user's own GitHub account through the GitHub CLI, so DiffDojo never handles a GitHub token. It contains XP, belts, streak, accuracy, trophy names, battles cleared and a project count, never code, questions, paths or project names (unless `--projects`). `--remove` deletes it.
 - `diffdojo export` writes all data for a repo to a single JSON file. `diffdojo purge [--repo]` deletes it.
 
 ## Model path note
