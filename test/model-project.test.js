@@ -28,7 +28,11 @@ fs.writeFileSync(path.join(bin, 'claude.js'), `
 const fs = require('fs');
 fs.appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
 const input = fs.readFileSync(0, 'utf8');
-const reply = input.includes('Answer each multiple-choice') ? { answers: ['b', 'a'] } : ${JSON.stringify(QUESTIONS)};
+const TOPIC = { questions: [
+  { question: 'What does EPOLLET change?', choices: { a: 'Nothing', b: 'Edge-triggered: you are told once per change, so read until EAGAIN', c: 'It blocks', d: 'It closes the fd' }, answer: 'b', explanation: 'Edge-triggered.', difficulty: 'medium' },
+  { question: 'Which call adds an fd to an epoll set?', choices: { a: 'epoll_wait', b: 'epoll_create1', c: 'epoll_ctl with EPOLL_CTL_ADD', d: 'poll' }, answer: 'c', explanation: 'epoll_ctl.', difficulty: 'easy' },
+] };
+const reply = input.includes('Answer each multiple-choice') ? (input.includes('EPOLLET') ? { answers: ['b', 'c'] } : { answers: ['b', 'a'] }) : input.includes('technical questions about:') ? TOPIC : ${JSON.stringify(QUESTIONS)};
 process.stdout.write(JSON.stringify({ type: 'result', result: JSON.stringify(reply) }));
 `);
 fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\nexec node "${path.join(bin, 'claude.js')}" "$@"\n`, { mode: 0o755 });
@@ -95,4 +99,35 @@ test('model.enabled false keeps everything local', async () => {
   write(repo, 'a.py', fixture('scheduler.py'));
   await pipeline.generate({ db: store.open(), root: repo, repoId, sessionId: 'M2', cfg: config.load(repoId), fromTree: from, toTree: git.snapshot(repo), onlyFiles: ['a.py'] });
   assert.strictEqual(fs.readFileSync(argsLog, 'utf8'), '', 'claude was never called');
+});
+
+test('Prepare: Claude writes questions on a topic in advance, checked blind, with the model and effort set', async () => {
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ model: { enabled: true, model: 'claude-sonnet-5-5', effort: 'medium' } }));
+  fs.writeFileSync(argsLog, '');
+  const { spawnSync } = require('child_process');
+  const dir = makeRepo({ 'a.py': 'x = 1\n' });
+  const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'diffdojo'), 'api', 'prepare', 'epoll', 'edge', 'triggered'], { cwd: dir, encoding: 'utf8', env: process.env });
+  const out = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.deepStrictEqual([out.added, out.via], [2, 'claude'], r.stderr);
+  const calls = fs.readFileSync(argsLog, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.strictEqual(calls.length, 2);
+  for (const a of calls) {
+    assert.strictEqual(a[a.indexOf('--model') + 1], 'claude-sonnet-5-5');
+    assert.strictEqual(a[a.indexOf('--effort') + 1], 'medium');
+  }
+  const qs = store.open().all("SELECT * FROM questions WHERE type = 'prepared'").map(store.hydrate);
+  assert.strictEqual(qs.length, 2);
+  assert.ok(qs.every((q) => q.topic === 'prepared/epoll-edge-triggered' && q.grading === 'model'));
+});
+
+test('Prepare without Claude picks questions on the topic from the packs', () => {
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ model: { enabled: false } }));
+  fs.writeFileSync(argsLog, '');
+  const { spawnSync } = require('child_process');
+  const dir = makeRepo({ 'a.py': 'x = 1\n' });
+  const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'diffdojo'), 'api', 'prepare', 'epoll'], { cwd: dir, encoding: 'utf8', env: process.env });
+  const out = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.strictEqual(out.via, 'packs');
+  assert.ok(out.added > 0);
+  assert.strictEqual(fs.readFileSync(argsLog, 'utf8'), '', 'claude was not called');
 });

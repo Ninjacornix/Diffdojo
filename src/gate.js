@@ -293,4 +293,4 @@ async function answer(db, id, response, { cfg, root } = {}) {
   return { correct: graded.correct === true, xp: graded.xp || 0, answerText: q.choices[q.answer], explanation: q.explanation || null, trophies: graded.trophies || [], difficulty: q.difficulty, file: q.code_file || null };
 }
 
-module.exports = { create, answer, proposed, changedLines };
+module.exports = { create, answer, proposed, changedLines, lookAlikes, stripComment, equivalent, blankTemplates, firstDiff, labelled, KEYWORDS };

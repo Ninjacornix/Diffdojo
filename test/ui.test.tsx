@@ -153,6 +153,12 @@ function fakeBattle(on: any) {
     if (args[0] === 'battle-start') body = { state: FIGHT }
     if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
     if (args[0] === 'battle-quit') body = { state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
+    if (args[0] === 'achievements')
+      body = { belt: 'yellow', xp: 210, streak: 3, tracks: [{ name: 'C++', belt: 'yellow', xp: 210, nextAt: 400 }], battle: { wins: {}, best: {} },
+        trophies: [{ id: 'skynet', name: 'Judgment Averted — defeated SKYNET in No Mercy', earned: true, at: '2026-11-17' }, { id: 'evil-claude', name: 'Evil Claude Defeated', earned: false, at: null }] }
+    if (args[0] === 'settings') body = { enabled: true, model: 'claude-haiku-5-5', effort: 'low', perHour: 30 }
+    if (args[0] === 'topics') body = { topics: ['C++', 'epoll and non-blocking sockets'] }
+    if (args[0] === 'prepare') body = { added: 6, via: 'claude', topic: args.slice(1).join(' ') }
     if (args[0] === 'battle-answer')
       body = {
         correct: args[1] === 'b', correctKey: 'b', xp: 5, explanation: 'BFS explores by distance.', enemyName: 'TYPO SPRITE', playerName: 'MILAN',
@@ -162,6 +168,13 @@ function fakeBattle(on: any) {
     return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
   })
   return calls
+}
+
+
+/** Pick a fight from the menu: main screen, then the Fight or Special fights screen. */
+async function pick(ui: any, mode: string) {
+  await ui.select({ key: 'menu', value: ['nomercy', 'bughunter'].includes(mode) ? 'special' : 'ladders' })
+  await ui.select({ key: 'mode', value: mode })
 }
 
 const BATTLE_PANE = {
@@ -176,11 +189,11 @@ test('battle: pick a mode, fight with arrows + Enter, see the hit, continue', as
   await boot($, on)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BATTLE_PANE, surface } as any)
-    expect(await ui.find({ key: 'mode' })).toBeTruthy()
+    expect(await ui.find({ key: 'menu' })).toBeTruthy()
     await ui.unmount()
   }
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'easy' })
+  await pick(ui, 'easy')
   expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
   await ui.select({ key: 'intro', value: 'go' }) // skip the slide-in
   await ui.select({ key: 'intro', value: 'go' }) // continue
@@ -199,7 +212,7 @@ test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
   fakeBattle(on)
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'easy' })
+  await pick(ui, 'easy')
   expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
   await ui.select({ key: 'intro', value: 'go' }) // skip the slide-in
   await ui.select({ key: 'intro', value: 'go' }) // continue
@@ -255,7 +268,7 @@ test('battle: a failed start stays on the menu with a toast instead of silently 
   const toasts: string[] = []
   await boot($, on, toasts)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'easy' })
+  await pick(ui, 'easy')
   expect(toasts.some(t => /could not start/.test(t))).toBe(true)
   expect(await ui.find({ key: 'mode' })).toBeTruthy()
   await ui.unmount()
@@ -265,7 +278,7 @@ test('battle: picking a mode outside a git repository starts the fight', async (
   const calls = fakeNoGit(on)
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'endless' })
+  await pick(ui, 'endless')
   expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'endless')).toBe(true)
   expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
   await ui.unmount()
@@ -503,14 +516,14 @@ test('battle: RUN ends the fight and goes back to the menu', async ($, on) => {
   const calls = fakeBattle(on)
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'easy' })
+  await pick(ui, 'easy')
   await ui.select({ key: 'intro', value: 'go' })
   await ui.select({ key: 'intro', value: 'go' })
   expect(await ui.find({ key: 'q-11' })).toBeTruthy()
   await ui.select({ key: 'q-11', value: '__run' })
   expect(calls.some(c => c[0] === 'battle-quit')).toBe(true)
   expect(calls.some(c => c[0] === 'battle-answer')).toBe(false)
-  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  expect(await ui.find({ key: 'menu' })).toBeTruthy()
   await ui.unmount()
 })
 
@@ -519,7 +532,7 @@ test('battle menu: No Mercy shows SKYNET\'s warning, then starts the fight with 
   person(on, 'heap')
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  await ui.select({ key: 'mode', value: 'nomercy' })
+  await pick(ui, 'nomercy')
   expect(await ui.find({ type: 'Text', text: /N O   M E R C Y/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /Answer wrong and SKYNET rejects it and Claude stops/ })).toBeTruthy()
   await ui.select({ key: 'skynet', value: 'fight' })
@@ -530,5 +543,70 @@ test('battle menu: No Mercy shows SKYNET\'s warning, then starts the fight with 
   expect(await ui.find({ type: 'Text', text: /no health bar/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /TOKENS/ })).toBeFalsy()
   expect(await ui.find({ type: 'Text', text: /SKYNET is watching Claude/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---------------- the menu's screens, the intro, Bug Hunter ----------------
+
+test('battle: after the intro the fight starts by itself, no Enter needed', async ($, on) => {
+  const calls = fakeBattle(on)
+  const clock = await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await pick(ui, 'easy')
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
+  await clock.advance(3000)
+  expect(calls.some(c => c[0] === 'battle-question')).toBe(true)
+  expect(await ui.find({ key: 'q-11' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('menu: Achievements shows trophies, belts and XP on its own screen', async ($, on) => {
+  fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'achievements' })
+  expect(await ui.find({ type: 'Text', text: /\[ACHIEVEMENTS\]/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Belt: YELLOW/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /\[x\] Judgment Averted/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /\[ \] Evil Claude Defeated/ })).toBeTruthy()
+  await ui.select({ key: 'back', value: 'back' })
+  expect(await ui.find({ key: 'menu' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('menu: Settings picks the model and the effort', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'settings' })
+  await ui.select({ key: 'settings', value: 'model' })
+  expect(calls.some(c => c.join(' ').includes('config set model.model claude-sonnet-5-5 --global'))).toBe(true)
+  await ui.select({ key: 'settings', value: 'effort' })
+  expect(calls.some(c => c.join(' ').includes('config set model.effort medium --global'))).toBe(true)
+  await ui.unmount()
+})
+
+test('menu: Prepare writes questions on a picked or typed topic before the fight', async ($, on) => {
+  const calls = fakeBattle(on)
+  const toasts: string[] = []
+  await boot($, on, toasts)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'prepare' })
+  await ui.select({ key: 'prepare', value: 'epoll and non-blocking sockets' })
+  expect(calls.some(c => c[0] === 'prepare' && c.slice(1).join(' ') === 'epoll and non-blocking sockets')).toBe(true)
+  expect(toasts.some(t => /Prepared 6 questions/.test(t) && /written by Claude/.test(t))).toBe(true)
+  await ui.input({ key: 'topic', text: 'Rust lifetimes' })
+  expect(calls.some(c => c[0] === 'prepare' && c.slice(1).join(' ') === 'Rust lifetimes')).toBe(true)
+  await ui.unmount()
+})
+
+test('menu: Bug Hunter starts the fight against FREE CHINESE LLM', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'menu', value: 'special' })
+  expect(await ui.find({ type: 'Text', text: /\[SPECIAL\]/ })).toBeTruthy()
+  await ui.select({ key: 'mode', value: 'bughunter' })
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'bughunter')).toBe(true)
   await ui.unmount()
 })

@@ -49,6 +49,7 @@ const MODES = [
   ['hard', 'Hard', 'Race Condition, Deadlock Twins, Heisenbug'],
   ['professional', 'Professional', 'Segfault Specter, Legacy Monolith, EVIL CLAUDE'],
   ['endless', 'Endless', 'waves that keep coming'],
+  ['bughunter', 'Bug Hunter', 'FREE CHINESE LLM slips a bug into Claude\'s code: find the fix'],
 ];
 
 /** The whole game as a small state machine; draw() returns the screen lines. */

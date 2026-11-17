@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 
-import type { BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk } from '../types'
+import type { Achievements, BattleQuestion, BattleResult, BattleView, BattleAnim, GateAsk, ModelSettings } from '../types'
 import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
 
@@ -29,6 +29,12 @@ const busy = atom({ plugin: 'diffdojo', key: 'battleBusy' } as const, false)
 // Whether a No Mercy fight is on (hooks/nomercy.tsx gates Claude's edits on it), and whether SKYNET's screen is showing.
 const noMercy = atom({ plugin: 'diffdojo', key: 'noMercy' } as const, false)
 const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, false)
+// The menu's screens, and what they show.
+const menuTab = atom({ plugin: 'diffdojo', key: 'menuTab' } as const, 'main')
+const achievements = atom({ plugin: 'diffdojo', key: 'achievements' } as const, null, { shape: 'ach-1' })
+const settings = atom({ plugin: 'diffdojo', key: 'modelSettings' } as const, null, { shape: 'set-1' })
+const topics = atom({ plugin: 'diffdojo', key: 'prepareTopics' } as const, [] as string[])
+const preparing = atom({ plugin: 'diffdojo', key: 'preparing' } as const, '')
 // SKYNET's question about an edit Claude is about to make, asked in this pane.
 const gateAsk = atom({ plugin: 'diffdojo', key: 'gateAsk' } as const, null, { shape: 'ga-1' })
 
@@ -105,7 +111,13 @@ function frames($: Engine) {
     const a = await read($, anim)
     const sliding = i >= 0 && i < INTRO_STEPS
     const hitting = !!a && a.frame < ANIM_FRAMES
-    if (sliding) await update($, intro, n => Math.min(INTRO_STEPS, n + 1))
+    if (sliding) {
+      await update($, intro, n => Math.min(INTRO_STEPS, n + 1))
+      // Once the enemy is in place the fight starts by itself (Enter skips the wait).
+      if (i + 1 >= INTRO_STEPS) $.clock.after(900, async () => {
+        if ((await read($, intro)) === INTRO_STEPS) await endIntro($)
+      })
+    }
     if (hitting) await update($, anim, cur => (cur ? { ...cur, frame: cur.frame + 1 } : cur))
     if (!sliding && !hitting) {
       frameTimer?.cancel()
@@ -266,6 +278,7 @@ async function again($: Engine) {
 }
 
 async function toMenu($: Engine) {
+  await update($, menuTab, () => 'main')
   const r = await cli($, ['battle-quit'])
   if (r.error || !r.state) return $.ui.toast(`DiffDojo: ${r.error || 'could not return to the menu'}`)
   await setScene($, r.state as BattleView)
@@ -277,6 +290,50 @@ async function toMenu($: Engine) {
 // The option in every fight that ends it and goes back to the menu.
 const RUN = '__run'
 
+/** Model choices in Settings: cheapest first. */
+const MODELS: [string, string][] = [
+  ['claude-haiku-5-5', 'Haiku 5.5 (cheapest)'],
+  ['claude-sonnet-5-5', 'Sonnet 5.5'],
+  ['claude-opus-5-5', 'Opus 5.5 (smartest)'],
+]
+const EFFORTS = ['low', 'medium', 'high']
+
+async function setConfig($: Engine, key: string, value: string) {
+  await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'config', 'set', key, value, '--global'])
+}
+
+/** Go to a menu screen, loading what it shows. */
+async function goTab($: Engine, tab: string) {
+  if (tab === 'achievements') {
+    const r = await cli($, ['achievements'])
+    await update($, achievements, () => (r.error ? null : (r as unknown as Achievements)))
+  }
+  if (tab === 'settings' || tab === 'main') {
+    const r = await cli($, ['settings'])
+    if (!r.error) await update($, settings, () => r as unknown as ModelSettings)
+  }
+  if (tab === 'prepare') {
+    const r = await cli($, ['topics'])
+    await update($, topics, () => (Array.isArray(r.topics) ? (r.topics as string[]) : []))
+  }
+  await update($, menuTab, () => tab)
+}
+
+/** Questions written in advance on a topic, for the next fights. */
+async function prepare($: Engine, topic: string) {
+  const t = topic.trim()
+  if (!t || (await read($, preparing))) return
+  await update($, preparing, () => t)
+  try {
+    const r = await cli($, ['prepare', t])
+    if (r.error) $.ui.toast(`DiffDojo: ${r.error}`)
+    else if (!r.added) $.ui.toast(`DiffDojo: no questions found on "${t}". Try another topic, or turn on Claude in Settings.`)
+    else $.ui.toast(`Prepared ${r.added} questions on "${t}" (${r.via === 'claude' ? 'written by Claude' : 'from the question packs'}). They come up in your next fights.`, { timeoutMs: 8000 })
+  } finally {
+    await update($, preparing, () => '')
+  }
+}
+
 const MODES = [
   ['easy', 'Easy', 'Typo Sprite, Lint Gremlin, Off-by-One Imp'],
   ['medium', 'Medium', 'Null Pointer, Memory Leak, Flaky Test'],
@@ -287,9 +344,25 @@ const MODES = [
 
 // Not a ladder: No Mercy's boss guards Claude's edits (hooks/nomercy.tsx).
 const NO_MERCY = 'nomercy'
+const BUG_HUNTER = 'bughunter'
+const SPECIAL = [
+  [NO_MERCY, 'No Mercy', 'SKYNET: answer for every edit Claude makes'],
+  [BUG_HUNTER, 'Bug Hunter', 'FREE CHINESE LLM slips a bug into Claude\'s code: find the fix'],
+]
+const TABS: [string, string][] = [
+  ['ladders', 'FIGHT'],
+  ['special', 'SPECIAL'],
+  ['prepare', 'PREPARE'],
+  ['achievements', 'ACHIEVEMENTS'],
+  ['settings', 'SETTINGS'],
+]
 
 /** Called from the plugin's one session.start hook. */
 export async function battleSessionStart($: Engine) {
+  void (async () => {
+    const r = await cli($, ['settings'])
+    if (!r.error) await update($, settings, () => r as unknown as ModelSettings)
+  })()
   await $.command.register({ name: 'battle', description: 'DiffDojo Battle: fight bugs by answering questions (on | off | menu)', argumentHint: '[on|off|menu]' })
   void sync($)
 }
@@ -319,7 +392,7 @@ export function registerBattle(on: On) {
   })
 
   on('ui.render', { component: 'Pane', requestId: BATTLE_PANE }, async ($, e) => {
-    const { Box, Text, Select } = $.ui.resolve(e)
+    const { Box, Text, Select, Input } = $.ui.resolve(e)
     const s = await read($, scene)
     const q = await read($, question)
     const res = await read($, outcome)
@@ -401,30 +474,136 @@ export function registerBattle(on: On) {
       )
     }
 
-    // ---- menu
+    // ---- menu: a main screen and a screen per tab
     if (!s || !s.mode || s.phase === 'menu') {
       const best = (s && s.best) || {}
       const wins = (s && s.wins) || {}
+      const tab = await read($, menuTab)
+      const tabBar = plain('   ' + TABS.map(([id, name]) => (id === tab ? `[${name}]` : ` ${name} `)).join(' '), W, PALETTE.ink, true)
+      const back = { value: 'back', label: '< Back to the menu' }
+      const goBack = () => goTab($, 'main')
+      const footer = <Text dimColor>up/down choose · Enter select · Esc back to the prompt</Text>
+      const titled = (title: string, body: unknown) => (
+        <Box flexDirection="column">
+          {draw([plain('', W), tabBar, plain('', W), plain(`   ${title}`, W, PALETTE.ink, true), plain('', W)])}
+          {rule}
+          {body}
+          {rule}
+          {footer}
+        </Box>
+      )
+      const cleared = (id: string) => (wins[id] ? `  cleared x${wins[id]}` : '')
+
+      if (tab === 'ladders')
+        return titled(
+          'Battle ladders: answer right to strike, answer wrong and they strike back. 3 lives.',
+          <Select
+            key="mode"
+            autoFocus
+            options={[
+              ...MODES.map(([value, label, who]) => ({ value, label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${cleared(value)}` })),
+              back,
+            ]}
+            onSelect={value => (value === 'back' ? goBack() : choose($, value))}
+          />,
+        )
+
+      if (tab === 'special')
+        return titled(
+          'Special fights',
+          <Select
+            key="mode"
+            autoFocus
+            options={[...SPECIAL.map(([value, label, who]) => ({ value, label: `${label.padEnd(13)} ${who}${cleared(value)}` })), back]}
+            onSelect={value => (value === 'back' ? goBack() : value === NO_MERCY ? update($, skynetView, () => true) : choose($, value))}
+          />,
+        )
+
+      if (tab === 'achievements') {
+        const ach = await read($, achievements)
+        const got = ach ? ach.trophies.filter(x => x.earned) : []
+        const rows: BoxRow[] = !ach
+          ? [{ text: 'Loading...' }]
+          : [
+              { text: `Belt: ${ach.belt.toUpperCase()}  ·  ${ach.xp} XP  ·  streak ${ach.streak} day${ach.streak === 1 ? '' : 's'}` },
+              ...ach.tracks.slice(0, 4).map(x => ({ text: `  ${x.name}: ${x.belt}, ${x.xp} XP${x.nextAt ? ` (next belt at ${x.nextAt})` : ''}`, dim: true })),
+              { text: '' },
+              { text: `Trophies: ${got.length} of ${ach.trophies.length}` },
+              ...[...got, ...ach.trophies.filter(x => !x.earned)].map(x => ({ text: `  ${x.earned ? '[x]' : '[ ]'} ${x.name}`, dim: !x.earned })),
+            ]
+        return titled('Achievements', <Box flexDirection="column">{rowsOf(rows.flatMap(r => wrap([r.text], W - 6).map(text => ({ ...r, text }))))}<Select key="back" autoFocus options={[back]} onSelect={goBack} /></Box>)
+      }
+
+      if (tab === 'settings') {
+        const m = await read($, settings)
+        const name = (id: string | null) => MODELS.find(([v]) => v === id)?.[1] || id || 'default'
+        return titled(
+          'Settings: how Claude writes your questions',
+          <Box flexDirection="column">
+            {rowsOf(wrap(['Claude writes technical questions about each change in the background, on your own plan. A bigger model or more effort writes harder questions and uses more of your plan.'], W - 6).map(text => ({ text, dim: true })))}
+            <Select
+              key="settings"
+              autoFocus
+              options={[
+                { value: 'model', label: `Model:   ${name(m?.model ?? null)}   (Enter: next)` },
+                { value: 'effort', label: `Effort:  ${m?.effort || 'low'}   (Enter: next)` },
+                { value: 'enabled', label: `Claude writes questions: ${m?.enabled ? 'on' : 'off'}   (Enter: switch)` },
+                back,
+              ]}
+              onSelect={async value => {
+                if (value === 'back') return goBack()
+                if (value === 'model') {
+                  const k = MODELS.findIndex(([v]) => v === m?.model)
+                  await setConfig($, 'model.model', MODELS[(k + 1) % MODELS.length][0])
+                }
+                if (value === 'effort') await setConfig($, 'model.effort', EFFORTS[(EFFORTS.indexOf(m?.effort || 'low') + 1) % EFFORTS.length])
+                if (value === 'enabled') await setConfig($, 'model.enabled', m?.enabled ? 'false' : 'true')
+                await goTab($, 'settings')
+              }}
+            />
+          </Box>,
+        )
+      }
+
+      if (tab === 'prepare') {
+        const list = await read($, topics)
+        const busyWith = await read($, preparing)
+        return titled(
+          'Prepare questions on a topic, for your next fights',
+          <Box flexDirection="column">
+            {rowsOf(
+              wrap(
+                [busyWith ? `Preparing questions on "${busyWith}"... (Claude writes and checks them; this takes a moment)` : 'Pick a topic, or type your own below (ctrl+x tab to reach the box). Claude writes the questions; without Claude they come from the question packs.'],
+                W - 6,
+              ).map(text => ({ text, dim: !busyWith })),
+            )}
+            <Select key="prepare" autoFocus options={[...list.map(x => ({ value: x, label: x })), back]} onSelect={value => (value === 'back' ? goBack() : prepare($, value))} />
+            <Input key="topic" label="topic" placeholder="your own topic, e.g. Rust lifetimes" submitLabel="prepare" onSubmit={value => prepare($, value)} />
+          </Box>,
+        )
+      }
+
+      // The main screen
+      const m = await read($, settings)
       return (
         <Box flexDirection="column">
           {draw([plain('', W), ...TITLE.map((l, n) => plain('   ' + l, W, n % 2 === t % 2 ? PALETTE.ink : PALETTE.mid, true)), plain('', W)])}
-          {draw([plain('   Answer right to strike. Answer wrong and they strike back. 3 lives.', W), plain('', W)])}
           {rule}
           <Select
-            key="mode"
-            label="Choose your fight"
+            key="menu"
+            label="Menu"
             autoFocus
             options={[
-              ...MODES.map(([value, label, who]) => ({
-                value,
-                label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${wins[value] ? `  cleared x${wins[value]}` : ''}`,
-              })),
-              { value: NO_MERCY, label: `${'No Mercy'.padEnd(13)} SKYNET: answer for every edit Claude makes${wins[NO_MERCY] ? `  cleared x${wins[NO_MERCY]}` : ''}` },
+              { value: 'ladders', label: 'Fight           Easy, Medium, Hard, Professional, Endless' },
+              { value: 'special', label: 'Special fights  No Mercy (SKYNET), Bug Hunter (FREE CHINESE LLM)' },
+              { value: 'prepare', label: 'Prepare         questions on a topic, before you fight' },
+              { value: 'achievements', label: 'Achievements    trophies, belts and records' },
+              { value: 'settings', label: `Settings        model: ${MODELS.find(([v]) => v === m?.model)?.[1] || m?.model || '...'}, effort: ${m?.effort || 'low'}` },
             ]}
-            onSelect={value => (value === NO_MERCY ? update($, skynetView, () => true) : choose($, value))}
+            onSelect={value => goTab($, value)}
           />
           {rule}
-          <Text dimColor>up/down choose · Enter fight · Esc back to the prompt</Text>
+          {footer}
         </Box>
       )
     }
@@ -432,13 +611,13 @@ export function registerBattle(on: On) {
     // ---- game over / victory
     if (s.phase === 'gameover' || s.phase === 'victory') {
       const won = s.phase === 'victory'
-      const id = s.noHealth ? (won ? 'player' : 'skynet') : won && s.mode === 'professional' ? 'evil' : 'player'
+      const id = s.noHealth ? (won ? 'player' : 'skynet') : won && s.mode === 'professional' ? 'evil' : !won && s.mode === BUG_HUNTER ? 'freellm' : 'player'
       const message = s.noHealth
         ? won
           ? `Claude finished your prompt, and you answered for all ${s.passed} of its edits. SKYNET falls!`
           : "SKYNET wins. Claude's edit was rejected and Claude stopped. Look at what it was doing, then face SKYNET again."
         : won
-          ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : ''}`
+          ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : s.mode === BUG_HUNTER ? ' FREE CHINESE LLM is defeated: no more "fixes".' : ''}`
           : 'Out of lives. Back to the first enemy with full health and 3 lives.'
       return (
         <Box flexDirection="column">
@@ -474,7 +653,7 @@ export function registerBattle(on: On) {
     let control: unknown = null
     if (sliding) {
       rows = wrap([enemy.boss ? `${enemy.name} appears! The final battle begins!` : `${enemy.name} wants to fight!`], W - 6).map(text => ({ text }))
-      control = <Select key="intro" autoFocus options={[{ value: 'go', label: i >= INTRO_STEPS ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => endIntro($)} />
+      control = <Select key="intro" autoFocus options={[{ value: 'go', label: 'Fight! (Enter)' }]} onSelect={() => endIntro($)} />
     } else if (res) {
       const lines: string[] = []
       if (res.intercept) lines.push(`${res.enemyName} intercepted Claude's edit${res.file ? ` to ${res.file}` : ''}!`)
@@ -490,7 +669,7 @@ export function registerBattle(on: On) {
       rows = lines.map(text => ({ text }))
       if (res.explanation) for (const x of wrap([res.explanation], W - 6).slice(0, 3)) rows.push({ text: x, dim: true })
       const done = !a || a.frame >= ANIM_FRAMES
-      control = <Select key="continue" autoFocus options={[{ value: 'go', label: done ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => proceed($)} />
+      control = <Select key="continue" autoFocus options={[{ value: 'go', label: done ? 'Continue (Enter)' : '...' }]} onSelect={() => proceed($)} />
     } else if (q) {
       rows = wrap([`${enemy.name} asks: ${q.prompt}`], W - 6).map(text => ({ text }))
       if (q.location) rows.push({ text: `${q.family} · ${q.difficulty} · ${q.location}`, dim: true })

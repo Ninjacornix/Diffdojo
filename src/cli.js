@@ -369,7 +369,7 @@ const commands = {
     // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
-    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && sub !== 'status') return out({ enabled: false, battleAllowed, queued: 0, question: null });
+    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && !['status', 'achievements', 'settings', 'topics', 'prepare'].includes(sub)) return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
@@ -385,6 +385,68 @@ const commands = {
       const noticeFile = path.join(util.home(), 'model-notice.json');
       const modelNotice = !!(cfg.model && cfg.model.enabled && enabled && !fs.existsSync(noticeFile));
       return out({ ...status(), battle: cfg.battle, noMercy: require('./battle').noMercyActive(), modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
+    }
+    if (sub === 'achievements') {
+      // The battle menu's Achievements tab: trophies (earned or not), belts, battle records.
+      const rewards = require('./rewards');
+      const st = stats.compute(d, {});
+      const earned = new Map(st.trophies.map((t) => [t.id, t.awarded_at]));
+      const b = require('./battle').load();
+      return out({
+        belt: st.overallBelt, xp: st.totalXp, streak: st.streak,
+        trophies: Object.entries(rewards.TROPHIES).map(([id, name]) => ({ id, name, earned: earned.has(id), at: earned.get(id) || null })),
+        tracks: st.tracks.map((t) => ({ name: t.name, belt: t.belt, xp: t.xp, nextAt: t.nextAt })),
+        battle: { wins: b.wins || {}, best: b.best || {} },
+      });
+    }
+    if (sub === 'settings') {
+      const m = config.load(repoId).model || {};
+      return out({ enabled: !!m.enabled, model: m.model || null, effort: m.effort || 'low', perHour: m.perHour || null });
+    }
+    if (sub === 'topics') {
+      // Suggestions for "Prepare questions": this project's topics first, then the packs' tracks.
+      const prof = root ? require('./topics').profile(d, repoId, config.load(repoId).pinnedTopics) : [];
+      const names = require('./topics').TRACK_NAMES;
+      const fromProject = (Array.isArray(prof) ? prof : []).map((t) => (typeof t === 'string' ? t : t.topic)).filter(Boolean).slice(0, 6);
+      const extra = ['epoll and non-blocking sockets', 'C++ move semantics', 'Python asyncio', 'JavaScript promises and the event loop', 'Big-O and data structures', 'SQL indexes'];
+      const seen = new Set();
+      const list = [...fromProject, ...Object.values(names).filter((n) => n !== 'General'), ...extra].filter((t) => t && !seen.has(t) && seen.add(t));
+      return out({ topics: list.slice(0, 16) });
+    }
+    if (sub === 'prepare') {
+      // Questions written in advance on a topic: by Claude (model path), else picked from the packs.
+      const topic = pos.slice(2).join(' ').trim();
+      if (!topic) return out({ error: 'name a topic' });
+      const cfg = config.load(repoId);
+      const batch = `${util.nowIso()}#prepared`;
+      const store = require('./store');
+      const slug = util.slug ? util.slug(topic) : topic.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      let added = 0;
+      let via = 'packs';
+      const model = require('./model');
+      if (model.available(d, cfg).ok) {
+        const prof = root ? require('./topics').profile(d, repoId, cfg.pinnedTopics) : [];
+        const qs = await model.topicQuestions(d, cfg, { topic, projectTopics: (Array.isArray(prof) ? prof : []).map((t) => (typeof t === 'string' ? t : t.topic)).filter(Boolean) });
+        for (const q of qs) {
+          store.insertQuestion(d, {
+            family: 'questionnaire', type: 'prepared', format: 'choice', topic: `prepared/${slug}`, track: null, difficulty: q.difficulty,
+            grading: 'model', xp: { easy: 5, medium: 8, hard: 10 }[q.difficulty] || 8, title: `Prepared · ${topic}`, prompt: q.question,
+            choices: q.choices, answer: q.answer, explanation: q.explanation, evidence: 'written by Claude on request, confirmed by a blind second answer',
+            meta: { selectedBy: `prepared: ${topic}`, generatedBy: 'model' }, repo_id: repoId || null, batch,
+          });
+          added++;
+        }
+        if (added) via = 'claude';
+      }
+      if (!added) {
+        const words = topic.toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+        const hits = require('./packs').load().questions.filter((q) => q.format === 'multiple_choice' && words.some((w) => `${q.topic} ${q.track} ${q.question}`.toLowerCase().includes(w)));
+        for (const pq of util.shuffle(hits).slice(0, 6)) {
+          store.insertQuestion(d, { ...require('./packs').toQuestion(pq, { type: 'prepared', meta: { pack: pq.pack, selectedBy: `prepared: ${topic}` } }), repo_id: repoId || null, batch });
+          added++;
+        }
+      }
+      return out({ added, via, topic });
     }
     if (sub === 'model-notice-ack') {
       util.writeJson(path.join(util.home(), 'model-notice.json'), { at: util.nowIso() });

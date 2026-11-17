@@ -146,7 +146,7 @@ async function callApi(cfg, prompt, schema) {
     max_tokens: 16000,
     system: SYSTEM,
     messages: [{ role: 'user', content: prompt }],
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: apiSchema(schema) } },
+    output_config: { effort: cfg.model.effort || 'low', format: { type: 'json_schema', schema: apiSchema(schema) } },
   });
   if (response.stop_reason === 'refusal') return null;
   const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
@@ -173,12 +173,16 @@ function claudeRun(args, input) {
 
 function callCli(cfg, prompt, schema) {
   const full = `${SYSTEM}\n\nJSON schema for your reply:\n${JSON.stringify(schema)}\n\n${prompt}`;
-  const args = ['-p', '--output-format', 'json', '--max-turns', '1', '--tools', ''];
+  let args = ['-p', '--output-format', 'json', '--max-turns', '1', '--tools', ''];
   if (cfg.model.model) args.push('--model', cfg.model.model);
+  if (cfg.model.effort) args.push('--effort', cfg.model.effort);
   let r = claudeRun(args, full);
-  if (r.code !== 0 && /tools/.test(r.stderr)) {
-    // Older CLIs don't know --tools; retry without it.
-    r = claudeRun(args.filter((a, i) => !(a === '--tools' || args[i - 1] === '--tools')), full);
+  // Older CLIs don't know some flags: drop the one they name and retry.
+  for (const flag of ['--effort', '--tools']) {
+    if (r.code !== 0 && r.stderr.includes(flag.slice(2))) {
+      args = args.filter((a, i) => !(a === flag || args[i - 1] === flag));
+      r = claudeRun(args, full);
+    }
   }
   if (r.code !== 0) throw new Error(`claude -p failed: ${r.stderr.slice(0, 300)}`);
   const env = extractJson(r.stdout);
@@ -276,6 +280,55 @@ async function projectQuestions(db, cfg, { hunks, project, count = 3 }) {
   return qs.filter((q, i) => blind.answers[i] === q.answer);
 }
 
+const TOPIC_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['questions'],
+  properties: {
+    questions: {
+      type: 'array',
+      maxItems: 8,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['question', 'choices', 'answer', 'explanation', 'difficulty'],
+        properties: {
+          question: { type: 'string' },
+          choices: MC_SCHEMA.properties.choices,
+          answer: { type: 'string', enum: ['a', 'b', 'c', 'd'] },
+          explanation: { type: 'string' },
+          difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Questions written in advance on a topic the person picked (battle menu,
+ * "Prepare questions"), then answered blind; only agreed ones are kept.
+ */
+async function topicQuestions(db, cfg, { topic, count = 6, projectTopics = [] }) {
+  const prompt = [
+    `Write ${count} multiple-choice technical questions about: ${String(topic).slice(0, 120)}.`,
+    'They are for a developer practising between coding sessions: concrete and practical (behaviour, pitfalls, complexity, APIs,',
+    'what a short snippet does), mixed difficulty. Exactly one option is correct; the other three are plausible; options under 90',
+    'characters and distinct; vary the position of the correct option. Put any code inline in backticks inside the question.',
+    projectTopics.length ? `The developer's project uses: ${projectTopics.slice(0, 8).join(', ')}.` : '',
+  ].filter(Boolean).join('\n');
+  const out = await call(db, cfg, 'topic', prompt, TOPIC_SCHEMA);
+  if (!out || !out.questions.length) return [];
+  const qs = out.questions.filter((q) => new Set(Object.values(q.choices).map((c) => c.trim().toLowerCase())).size === 4);
+  if (!qs.length) return [];
+  const blindPrompt = [
+    'Answer each multiple-choice question. Reply {"answers": ["<letter>", ...]} in question order.',
+    ...qs.map((q, i) => `Question ${i + 1}: ${q.question}\n${Object.entries(q.choices).map(([k, v]) => `${k}) ${v}`).join('\n')}`),
+  ].join('\n\n');
+  const blind = await call(db, cfg, 'topic-blind', blindPrompt, { ...BLIND_MANY_SCHEMA, properties: { answers: { ...BLIND_MANY_SCHEMA.properties.answers, maxItems: 8 } } });
+  if (!blind) return [];
+  return qs.filter((q, i) => blind.answers[i] === q.answer);
+}
+
 /** Feedback-only review of a free-text answer (0 XP). */
 async function feedback(db, cfg, { question, code, answer }) {
   const prompt = `A developer answered an open review question about some code. Give 2-4 sentences of specific, honest feedback: what is right, what is missing or wrong. Reply {"feedback": "..."}.\nQuestion: ${question}\n${code ? fence('CODE', code) : ''}\n${fence('TEXT', `Answer: ${answer}`)}`;
@@ -283,4 +336,4 @@ async function feedback(db, cfg, { question, code, answer }) {
   return r ? r.feedback : null;
 }
 
-module.exports = { available, call, projectQuestions, claudeRun, whyQuestion, algoQuestion, feedback, validate, extractJson, MC_SCHEMA };
+module.exports = { available, call, projectQuestions, topicQuestions, claudeRun, whyQuestion, algoQuestion, feedback, validate, extractJson, MC_SCHEMA };

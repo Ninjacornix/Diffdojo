@@ -214,6 +214,24 @@ test('No Mercy: no health bars, one wrong answer loses, Claude finishing the pro
   assert.strictEqual(battle.intercept(db, { correct: true }), null);
 });
 
+test('Bug Hunter: FREE CHINESE LLM breaks one of Claude\'s functions; the right fix strikes it', async () => {
+  battle.start('bughunter');
+  assert.strictEqual(battle.view().enemy.name, 'FREE CHINESE LLM');
+  // Before Claude has written anything here, the demo project's functions are used.
+  const r = battle.nextQuestion(db, { repoId: null, rnd: () => 0.3 });
+  assert.ok(r.question, JSON.stringify(r));
+  assert.strictEqual(r.question.type, 'bug_fix');
+  assert.match(r.question.prompt, /FREE CHINESE LLM "optimised" Claude's `\w+`.* slipped a bug into line \d+\. Which line fixes it\?/);
+  assert.strictEqual(Object.keys(r.question.choices).length, 4);
+  const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', r.question.id));
+  assert.strictEqual(q.status, 'battle', 'bug-fix questions stay out of the plain quiz queue');
+  const pending = battle.load().pending;
+  const hit = await battle.answer(db, pending.correctKey, { cfg: {}, root: null });
+  assert.strictEqual(hit.correct, true);
+  assert.ok(hit.damage > 0);
+  assert.match(hit.explanation, /was changed from/);
+});
+
 test('the terminal game: RUN ends the battle and goes back to the menu', async () => {
   const term = require('../src/battle-term');
   const scene = await term.loadScene();

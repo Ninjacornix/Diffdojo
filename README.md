@@ -47,6 +47,22 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 
 **The fight didn't open when I sent a prompt?** Check that battle mode is on (`/battle on`) and DiffDojo isn't stopped in that project (`/diffdojo:start`). In a narrow terminal Claude Code may hold back panes a plugin opens by itself: type `/battle` to open it, or widen the window.
 
+## The battle menu
+
+`/battle` opens the menu:
+
+- **Fight**: the battle ladders (Easy, Medium, Hard, Professional with Evil Claude, Endless).
+- **Special fights**: **No Mercy** (SKYNET, below) and **Bug Hunter**.
+- **Prepare**: pick a topic (or type your own, like "Rust lifetimes") and Claude writes questions on it before you fight; without Claude they come from the question packs. They come up in your next fights.
+- **Achievements**: your belt, XP and streak, belts per topic, and every trophy, earned or not.
+- **Settings**: which Claude model writes your questions (Haiku 5.5, the cheapest and the default; Sonnet 5.5; Opus 5.5), how much effort it puts in (low, medium, high), and whether Claude writes questions at all.
+
+After an enemy's intro the fight starts by itself; Enter skips the wait.
+
+## Bug Hunter: fight FREE CHINESE LLM
+
+FREE CHINESE LLM "optimises" a function Claude wrote and slips one bug into it. You see the broken function and pick the line that fixes it; the wrong choices include leaving the bug in. Right answers strike it, wrong ones let it strike back, like any fight. Only the question has the bug: your files are never touched. Bugs come from Claude's recent code in your project (or the demo project before Claude has written any), and for Python and JavaScript DiffDojo runs the function first to make sure the "bug" really changes what it returns.
+
 ## No Mercy: fight SKYNET
 
 A battle mode for when you really want to keep up with Claude. **SKYNET** has no health bar, and neither do you. Its ability: **it intercepts every edit Claude makes for your prompt.** Before the change reaches the file, SKYNET asks you one question about that exact change, right in the battle pane beside the chat (it opens if it was closed; Claude Code's question dialog is used only if the pane can't be shown):

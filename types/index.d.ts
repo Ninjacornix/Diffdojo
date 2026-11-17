@@ -99,6 +99,19 @@ export type BattleResult = {
 /** SKYNET's question about an edit Claude is about to make (No Mercy), as the pane shows it. */
 export type GateAsk = { id: number; file: string; prompt: string; code: string | null; options: string[] }
 
+/** `diffdojo api achievements`: the battle menu's Achievements screen. */
+export type Achievements = {
+  belt: string
+  xp: number
+  streak: number
+  trophies: { id: string; name: string; earned: boolean; at: string | null }[]
+  tracks: { name: string; belt: string; xp: number; nextAt: number | null }[]
+  battle: { wins: Record<string, number>; best: Record<string, number> }
+}
+
+/** `diffdojo api settings`: which model writes the questions, and how hard it thinks. */
+export type ModelSettings = { enabled: boolean; model: string | null; effort: string; perHour: number | null }
+
 export type BattleAnim = { kind: 'enemyHit' | 'playerHit' | 'dodge'; frame: number }
 
 declare module 'claude-code' {
@@ -109,6 +122,11 @@ declare module 'claude-code' {
       noMercy: boolean
       skynetView: boolean
       gateAsk: Shaped<GateAsk | null>
+      menuTab: string
+      achievements: Shaped<Achievements | null>
+      modelSettings: Shaped<ModelSettings | null>
+      prepareTopics: string[]
+      preparing: string
       battleScene: Shaped<BattleView | null>
       battleAfter: Shaped<BattleView | null>
       battleQuestion: Shaped<BattleQuestion | null>

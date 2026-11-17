@@ -53,6 +53,7 @@ const DEFAULTS = {
     enabled: true,
     provider: 'claude-cli', // 'claude-cli' (claude -p) or 'api' (ANTHROPIC_API_KEY)
     model: 'claude-haiku-5-5',
+    effort: 'low', // low | medium | high: how hard the model thinks while writing questions
     perHour: 30, // model calls per hour; a batch of project questions is 2 (write + blind check)
     showExcerpts: true,
   },
