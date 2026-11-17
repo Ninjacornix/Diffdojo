@@ -39,7 +39,7 @@ function ensureDir(d) {
 }
 
 /** Walk up from `start` looking for a `.git` entry (dir or file). Pure fs, no git spawn. */
-function findRepoRoot(start) {
+function findGitRoot(start) {
   let dir = path.resolve(start || process.cwd());
   for (;;) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
@@ -50,10 +50,32 @@ function findRepoRoot(start) {
 }
 
 /**
+ * The project DiffDojo works in: the enclosing git repository, or else the
+ * folder itself (tracked through a shadow repository under ~/.diffdojo, see
+ * git.js). Never the home folder or a filesystem root, which are too broad to
+ * snapshot. Pure fs, no git spawn.
+ */
+function findRepoRoot(start) {
+  const dir = path.resolve(start || process.cwd());
+  const gitRoot = findGitRoot(dir);
+  if (gitRoot) return gitRoot;
+  if (path.dirname(dir) === dir) return null; // / or C:\
+  if (normPath(dir) === normPath(os.homedir())) return null;
+  if (normPath(dir) === normPath(home()) || normPath(dir).startsWith(normPath(home()) + '/')) return null; // DiffDojo's own data
+  return dir;
+}
+
+/** Shadow repository for a project folder that has no git of its own, else null. */
+function shadowGitDir(root) {
+  if (!root || fs.existsSync(path.join(root, '.git'))) return null;
+  return path.join(repoDir(repoId(root)), 'shadow.git');
+}
+
+/**
  * Is DiffDojo on for this repo? An explicit `/diffdojo:stop` (a `disabled`
  * marker) wins, then an explicit `/diffdojo:start`; otherwise the global
  * `autoEnable` setting decides, which is on by default: once the plugin is
- * enabled in Claude Code it runs in every git repository.
+ * enabled in Claude Code it runs in every project folder, git or not.
  */
 function isEnabled(id) {
   const d = repoDir(id);
@@ -94,10 +116,25 @@ function log(scope, err) {
 }
 
 /** Run a command without a shell. Returns {code, stdout, stderr, timedOut}. */
+// What a snippet keeps of the environment: enough to find compilers, runtimes
+// and temp space on every platform, and nothing that usually holds a secret.
+const SAFE_ENV = new Set(['PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ']);
+
+function cleanEnv() {
+  // Keys are matched without case (Windows spells it Path) and kept as spelled.
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (SAFE_ENV.has(k.toUpperCase())) env[k] = v;
+  return env;
+}
+
+/**
+ * Run a program. `opts.cleanEnv` starts from a minimal environment (no API
+ * keys, tokens or cloud credentials) instead of this process's own.
+ */
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
-    env: { ...process.env, DIFFDOJO_CHILD: '1', ...(opts.env || {}) },
+    env: { ...(opts.cleanEnv ? cleanEnv() : process.env), DIFFDOJO_CHILD: '1', ...(opts.env || {}) },
     input: opts.input,
     encoding: 'utf8',
     timeout: opts.timeout || 30000,
@@ -140,7 +177,8 @@ function which(bin) {
   const exts = process.platform === 'win32' ? (process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';') : [''];
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
-    for (const ext of ['', ...exts]) {
+    // On Windows a file without an extension can't be run: try PATHEXT first.
+    for (const ext of process.platform === 'win32' ? [...exts, ''] : ['']) {
       const p = path.join(dir, bin + ext);
       try {
         if (fs.statSync(p).isFile()) return p;
@@ -207,7 +245,7 @@ function dayKey(d = new Date()) {
 }
 
 module.exports = {
-  home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled, autoEnable,
+  cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, findGitRoot, shadowGitDir, isEnabled, autoEnable,
   readJson, writeJson, log, run, runShell, which, readStdin, nowIso, slug,
   shuffle, pick, rng, dayKey,
 };

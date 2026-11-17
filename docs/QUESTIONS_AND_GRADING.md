@@ -59,7 +59,7 @@ So when Claude is writing async socket code, the questionnaire leans toward epol
 | Source | How it's checked | XP | Counts for belt exams |
 |---|---|---|---|
 | **Curated packs** (shipped and community packs) | Human-reviewed in pull requests; snippet-based questions are compiled and run in the packs' CI | Full (5 / 10 / 15 by difficulty) | Yes |
-| **Project questions** from the model path, about your codebase ("Which module owns connection retries?") | Answer must be backed by a cited file and line; validator checks that the citation exists and contains the cited symbol | Half | No |
+| **Project questions** written by Claude (model path, on by default) about the change in your codebase ("What does `due(5)` return when two jobs tie?") | Cite the file and lines they are about (shown with the question); answered blind by a second call and kept only if both agree; "bad question" removes one | Reduced (5 / 8 / 10 by difficulty) | No |
 | **Model-generated concept questions** (optional) | Generated, then answered blind by a separate model call; kept only if both agree; "dispute" button removes it | Half | No |
 
 ### Packs
@@ -136,7 +136,7 @@ Why did Claude add jitter to the retry delay?
 ```
 
 ### Requirements
-- Family C's structural questions work offline. "Why", algorithm and complexity questions need the model path.
+- Family C's structural questions work offline. Claude's project questions, "why", algorithm and complexity questions need the model path (on by default).
 - Only the extracted rationale (a few sentences) is stored, never the whole transcript.
 
 ## Difficulty

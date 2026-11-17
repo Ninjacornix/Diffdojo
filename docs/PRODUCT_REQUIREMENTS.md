@@ -19,7 +19,7 @@ The same feature set serves both. Difficulty adapts to the person.
 
 | ID | Story | Acceptance criterion |
 |---|---|---|
-| U1 | Starts on its own | Runs in every git repository once the plugin is enabled. `/diffdojo:stop` turns it off for one repository; `autoEnable false` restores per-repo opt-in. Progress is tracked across all projects. |
+| U1 | Starts on its own | Runs in every project folder, git or not, once the plugin is enabled. `/diffdojo:stop` turns it off for one repository; `autoEnable false` restores per-repo opt-in. Progress is tracked across all projects. |
 | U2 | Never slow Claude | All hooks are `async` and finish in well under a second. A DiffDojo crash never affects the Claude Code session. |
 | U3 | Relevant questions | Every code and design question cites a file and line range from the current session's changes. Every questionnaire question shows which detected or pinned topic selected it. |
 | U4 | Answer on my schedule | Questions queue up. They can be answered, skipped or snoozed at any time, including after the session ends. |

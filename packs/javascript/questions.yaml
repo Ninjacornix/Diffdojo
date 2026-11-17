@@ -283,3 +283,250 @@ questions:
       d: Synchronous console.log
     answer: [d, b, c, a]
     explanation: Synchronous code, then the nextTick queue, then promise microtasks, then timers.
+
+  - id: js-parseint-map-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(["1", "7", "11"].map(parseInt).join(" "));
+    answer: 1 NaN 3
+    explanation: map passes (value, index), so parseInt gets the index as its radix. parseInt("7", 1) is NaN and parseInt("11", 2) is 3. Write `.map((s) => parseInt(s, 10))` or `.map(Number)`.
+
+  - id: js-typeof-nan-001
+    topic: javascript/core
+    difficulty: easy
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(typeof null, NaN === NaN, Number.isNaN(NaN));
+    answer: object false true
+    explanation: typeof null is "object" for historical reasons, and NaN is the one value not equal to itself. Use Number.isNaN (or Object.is) to test for it.
+
+  - id: js-freeze-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print (a CommonJS script, not in strict mode)?
+    code: |
+      const cfg = Object.freeze({ port: 80, tags: ["a"] });
+      cfg.port = 81;
+      cfg.tags.push("b");
+      console.log(cfg.port, cfg.tags.length);
+    answer: 80 2
+    explanation: Object.freeze is shallow. The write to port is ignored silently (it would throw in strict mode), but the nested array is not frozen, so push works.
+
+  - id: js-for-in-of-001
+    topic: javascript/core
+    difficulty: easy
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const a = [10, 20];
+      const keys = [];
+      const values = [];
+      for (const k in a) keys.push(typeof k);
+      for (const v of a) values.push(v);
+      console.log(keys.join(","), values.join(","));
+    answer: string,string 10,20
+    explanation: for...in walks enumerable property names, which are strings (and includes inherited ones); for...of walks the iterable's values. Use for...of for arrays.
+
+  - id: js-bigint-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(2 ** 53 === 2 ** 53 + 1, 2n ** 53n === 2n ** 53n + 1n);
+    answer: true false
+    explanation: Numbers are 64-bit floats, exact only up to Number.MAX_SAFE_INTEGER (2^53 - 1). BigInt has arbitrary precision, which matters for IDs and counters from other systems.
+
+  - id: js-await-order-001
+    topic: javascript/async
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      const out = [];
+      async function f() {
+        out.push("f1");
+        await null;
+        out.push("f2");
+      }
+      f();
+      out.push("main");
+      setTimeout(() => console.log(out.join(" ")), 0);
+    answer: f1 main f2
+    explanation: An async function runs synchronously up to its first await; the rest resumes as a microtask after the current synchronous code finishes.
+
+  - id: js-json-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(JSON.stringify({ a: undefined, b: () => 1, c: null, d: NaN }));
+    answer: '{"c":null,"d":null}'
+    explanation: JSON.stringify drops properties whose value is undefined or a function, and writes NaN and Infinity as null. A JSON round trip is not a faithful copy.
+
+  - id: js-number-parse-001
+    topic: javascript/core
+    difficulty: medium
+    format: predict_output
+    language: javascript
+    question: What does this program print?
+    code: |
+      console.log(Number(""), parseInt(""), Number("12px"), parseInt("12px"));
+    answer: 0 NaN NaN 12
+    explanation: Number converts the whole string (an empty one is 0, trailing junk gives NaN); parseInt reads leading digits and stops. Validate input explicitly rather than relying on either.
+
+  - id: js-clone-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: Why is structuredClone(obj) usually a better deep copy than JSON.parse(JSON.stringify(obj))?
+    choices:
+      a: It is the only one that copies nested objects
+      b: It keeps Dates, Maps, Sets, typed arrays, undefined values and circular references, which a JSON round trip loses or throws on
+      c: It also copies functions and class methods
+      d: It returns a frozen object
+    answer: b
+    explanation: Neither copies functions or keeps class prototypes; structuredClone throws on functions and returns plain objects for class instances.
+
+  - id: js-optional-chain-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: "`user` is undefined. What does `user?.profile.name` evaluate to?"
+    choices:
+      a: It throws a TypeError reading `name` of undefined
+      b: undefined, because ?. short-circuits the rest of the chain
+      c: "null"
+      d: An empty string
+    answer: b
+    explanation: When the left side of ?. is null or undefined, the whole remaining chain is skipped. If user exists but profile is missing, `.name` still throws; that needs `user?.profile?.name`.
+
+  - id: js-nullish-check-001
+    topic: javascript/core
+    difficulty: easy
+    format: multiple_choice
+    question: Which values make `x == null` true?
+    choices:
+      a: Only null
+      b: null and undefined
+      c: null, undefined, 0 and ""
+      d: Every falsy value
+    answer: b
+    explanation: Loose equality treats null and undefined as equal to each other and to nothing else, which makes `x == null` a common shorthand for "missing".
+
+  - id: js-abort-001
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: What is the usual way to give a fetch() call in Node.js 18+ or a browser a timeout?
+    choices:
+      a: Wrap it in setTimeout
+      b: Pass `signal: AbortSignal.timeout(ms)` (or an AbortController's signal), which aborts the request and rejects the promise
+      c: Set `timeout: ms` in the fetch options
+      d: Use Promise.race with a timer; the request is cancelled automatically
+    answer: b
+    explanation: fetch has no timeout option. Promise.race only stops waiting; the request keeps running unless it is aborted through a signal.
+
+  - id: js-race-any-001
+    topic: javascript/async
+    difficulty: medium
+    format: multiple_choice
+    question: How do Promise.race and Promise.any differ?
+    choices:
+      a: They are aliases
+      b: race settles with the first promise to settle, fulfilled or rejected; any fulfils with the first fulfilment and rejects only if all reject (AggregateError)
+      c: any waits for every promise; race does not
+      d: race cancels the losing promises; any does not
+    answer: b
+    explanation: Neither cancels anything. Use any for "first success wins" (e.g. mirrors) and race for timeouts.
+
+  - id: js-esm-001
+    topic: javascript/core
+    difficulty: medium
+    format: multiple_choice
+    question: In a Node.js ES module (an .mjs file, or "type": "module" in package.json), which of these is true?
+    choices:
+      a: require, __dirname and __filename are not defined; use import, import.meta.dirname and import.meta.filename
+      b: ES modules can't import CommonJS packages
+      c: Top-level await is a syntax error
+      d: Imports are resolved lazily when first used
+    answer: a
+    explanation: ES modules can import CommonJS, support top-level await, and their static imports are resolved before the module runs. import.meta.dirname/filename exist from Node 20.11; createRequire gives you require when needed.
+
+  - id: js-emitter-error-001
+    topic: javascript/async
+    difficulty: hard
+    format: multiple_choice
+    question: A Node.js EventEmitter emits an "error" event and nothing listens for "error". What happens?
+    choices:
+      a: The event is dropped silently
+      b: The error is thrown, which crashes the process unless something catches it
+      c: It is logged as a warning
+      d: It becomes an unhandled promise rejection
+    answer: b
+    explanation: The "error" event is special: with no listener, emit throws the error. Always attach an error handler to streams, sockets and other emitters.
+
+  - id: js-ts-satisfies-001
+    topic: javascript/typescript
+    difficulty: hard
+    format: multiple_choice
+    question: "What does `const routes = { home: '/', about: '/about' } satisfies Record<string, string>` give you over a `: Record<string, string>` annotation?"
+    choices:
+      a: Runtime validation of the object
+      b: The object is checked against the type, but `routes` keeps its own narrower type, so `routes.home` is known and `routes.typo` is an error
+      c: Nothing; they are the same
+      d: It makes the object readonly
+    answer: b
+    explanation: An annotation widens the variable to the annotated type (every string key allowed); satisfies checks compatibility without widening. Types are erased either way, so nothing happens at runtime.
+
+  - id: js-ts-as-const-001
+    topic: javascript/typescript
+    difficulty: medium
+    format: multiple_choice
+    question: "What is the type of `const dirs = ['up', 'down'] as const`?"
+    choices:
+      a: string[]
+      b: readonly ["up", "down"]
+      c: ("up" | "down")[]
+      d: [string, string]
+    answer: b
+    explanation: as const infers the narrowest literal types and makes arrays readonly tuples. `typeof dirs[number]` is then the union "up" | "down".
+
+  - id: js-ts-never-001
+    topic: javascript/typescript
+    difficulty: hard
+    format: multiple_choice
+    question: "In a switch over a union's `kind`, why put `const _exhaustive: never = shape` in the default branch?"
+    choices:
+      a: It makes the default branch faster
+      b: If someone adds a new member to the union and forgets a case, `shape` is no longer never there, so the code stops compiling
+      c: It throws at runtime for unknown kinds
+      d: It tells TypeScript to skip type-checking the switch
+    answer: b
+    explanation: This is the exhaustiveness check: the compiler narrows the union case by case and only never is left once every member is handled.
+
+  - id: js-ts-utility-001
+    topic: javascript/typescript
+    difficulty: easy
+    format: multiple_choice
+    question: "Given `type User = { id: number; name: string; email: string }`, which type is `{ id?: number; name?: string; email?: string }`?"
+    choices:
+      a: Pick<User, 'id'>
+      b: Partial<User>
+      c: Required<User>
+      d: Record<keyof User, string>
+    answer: b
+    explanation: Partial makes every property optional, Required removes optionality, Pick keeps a subset of keys, and Record builds an object type from keys and one value type.

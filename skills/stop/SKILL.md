@@ -1,6 +1,6 @@
 ---
 name: stop
-description: Turn DiffDojo off for the current git repository only (it stays on everywhere else). Use when the user runs /diffdojo:stop or asks to turn DiffDojo off here.
+description: Turn DiffDojo off for the current project folder only (it stays on everywhere else). Use when the user runs /diffdojo:stop or asks to turn DiffDojo off here.
 allowed-tools: Bash(node:*)
 ---
 

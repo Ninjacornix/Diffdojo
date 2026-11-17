@@ -151,13 +151,14 @@ Notes:
   - Static-analysis prompts from tools already in the project (compiler warnings, clang-tidy, eslint, ruff): "this line triggers warning X — why?"
   - Questionnaire questions picked from packs by detected topic and adaptive difficulty.
   - Structural design questions from the structure analyzer ("what container is `pending_`?", "order this call path").
-- **Model path (optional, user-enabled):**
-  - Calls `claude -p` (headless mode on the user's own plan) or a provider API with the user's own key.
-  - The model writes question text and explanations, "why Claude did it" questions from extracted rationale, and algorithm and complexity questions.
+- **Model path (on by default, `model.enabled false` turns it off):**
+  - Calls `claude -p` (headless mode on the user's own plan, `claude-haiku-5-5` by default) or a provider API with the user's own key.
+  - First in every batch: technical multiple-choice questions about the change and the project, written in one call from the changed hunks (plus the project's file list and topics), then answered blind in a second call; only questions both agree on are kept (`type: project`, model-graded). They also feed the battle.
+  - The model also writes "why Claude did it" questions from extracted rationale, and algorithm and complexity questions.
   - **Answers to verified questions always come from execution, parsed code or reviewed packs, not from the model.**
   - Model-answered questions go through a blind check: a second call answers without seeing the key, and the question is kept only if both agree.
   - Recursion guard: the child process runs with `DIFFDOJO_CHILD=1`, and every hook script exits immediately when it sees that variable.
-  - Limits: default of 6 model generations per hour, configurable or off.
+  - Limits: default of 30 model calls per hour (`model.perHour`), configurable or off. The CLI's `api` does nothing inside the child, so DiffDojo's own UI stays out of it.
 
 ### Validator
 - Compiles and runs each "predict the output" snippet in a temporary directory before showing it. If it doesn't compile or run deterministically, it is dropped.

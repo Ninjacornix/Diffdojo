@@ -43,7 +43,7 @@ button.primary{background:var(--acc);border-color:var(--acc);color:var(--bg)}.ok
 </style></head><body><main>
 <header><h1>DiffDojo</h1><span class="mut" id="hdr"></span></header>
 <div id="app"></div>
-<p class="mut">Local only · nothing leaves this machine · <a href="#" id="statsLink">stats</a></p>
+<p class="mut">Progress stored locally · <a href="#" id="statsLink">stats</a></p>
 </main>
 <script>
 const TOKEN = new URLSearchParams(location.search).get('token');

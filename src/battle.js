@@ -160,7 +160,7 @@ const KEYS = ['a', 'b', 'c', 'd'];
 // The battle asks technical questions only: what Claude's code uses and what it
 // is (code concepts, data structures, algorithms, complexity) and concept quizzes;
 // never "which line changed" or "why did Claude...".
-const BATTLE_TYPES = ['concept', 'data_structure', 'algorithm', 'complexity', 'pack'];
+const BATTLE_TYPES = ['project', 'concept', 'data_structure', 'algorithm', 'complexity', 'pack'];
 
 /** Turn a stored question into a 4-answer battle question, or null. */
 function toFour(q, rnd = Math.random) {

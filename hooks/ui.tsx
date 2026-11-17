@@ -8,7 +8,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { DojoQuestion, DojoResult } from '../types'
-import { battleSessionStart, openBattle, registerBattle } from './battle'
+import { battleAutoStart, battleSessionStart, openBattle, registerBattle } from './battle'
+import { noMercySessionStart, registerNoMercy } from './nomercy'
 
 const PANE = 'diffdojo'
 const KEYS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -65,6 +66,17 @@ async function apply($: Engine, s: Api) {
   }
 }
 
+/** Once: say that Claude writes the questions, from code excerpts, and how to keep a project local. */
+async function modelNotice($: Engine) {
+  const s = (await api($, ['status'])) as Api & { modelNotice?: boolean; model?: string | null }
+  if (!s.modelNotice) return
+  $.ui.log(
+    `DiffDojo: Claude (${s.model || 'a small model'}, on your own plan) writes technical questions about each change in the background, ` +
+      'from short excerpts of the changed code. To keep a project fully local: diffdojo config set model.enabled false (add --global for every project).',
+  )
+  await api($, ['model-notice-ack'])
+}
+
 async function refresh($: Engine) {
   const s = await api($, ['next'])
   if (s.error) return
@@ -112,12 +124,15 @@ async function act($: Engine, q: DojoQuestion, what: 'skip' | 'snooze' | 'bad') 
 
 export const register: Register = on => {
   registerBattle(on)
+  registerNoMercy(on)
 
   on('session.start', async ($, e, nextHook) => {
     const started = await nextHook(e)
     await $.command.register({ name: 'dojo', description: 'Open the DiffDojo quiz pane (questions about what Claude just wrote)' })
     await battleSessionStart($)
+    await noMercySessionStart($)
     void refresh($)
+    void modelNotice($)
     return started
   })
 
@@ -131,9 +146,13 @@ export const register: Register = on => {
   // Claude starts working: make sure there is something to answer, and watch
   // for new questions the background worker adds.
   on('prompt.submit', async ($, e, nextHook) => {
+    // A real prompt typed by the person starts a fight; slash commands (/battle,
+    // /dojo...) and hidden prompts answer for themselves. The pane is opened
+    // first, while this is plainly the person's prompt, so Claude Code places it
+    // at any terminal width.
+    if (!e.command && !e.isMeta && (await battleAutoStart($))) void openBattle($, true)
     const r = await nextHook(e)
     await update($, working, () => true)
-    if ((await read($, battleOn)) && (await read($, enabled))) void openBattle($, true)
     void (async () => {
       const s = await api($, ['fill'])
       if (!s.error) await apply($, s)

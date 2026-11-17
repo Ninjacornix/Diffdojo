@@ -16,11 +16,14 @@ const DEFAULT_DENY = [
 ];
 
 const DEFAULTS = {
-  // Global only: run in every git repository unless /diffdojo:stop was used there.
+  // Global only: run in every project folder (git or not) unless /diffdojo:stop was used there.
   // Set false to go back to per-repo opt-in with /diffdojo:start.
   autoEnable: true,
   // In-app battle mode: while Claude works, questions come as a turn-based fight. /battle off to use the plain question box.
   battle: true,
+  // No Mercy mode: before each of Claude's edits, answer a question about it.
+  // Right: the edit goes through. Wrong: it is rejected and Claude stops. /nomercy on|off
+  noMercy: false,
   // Name shown in battles; empty = git user name, else the system username.
   playerName: null,
   deny: DEFAULT_DENY,
@@ -37,14 +40,23 @@ const DEFAULTS = {
   testTimeoutSec: 120,
   lintCommand: null, // optional; otherwise a few known linters are tried on changed files
   snippetTimeoutSec: 5,
+  // Global only. How code from Claude's change is run for predict-the-output
+  // questions. 'auto': in the strongest sandbox this machine has (bubblewrap
+  // on Linux, sandbox-exec on macOS: no network, no writes outside a temp
+  // folder), else unsandboxed with a minimal environment (Windows).
+  // 'require': skip those questions when no sandbox is available.
+  snippetSandbox: 'auto',
   snoozeMinutes: 60,
   whyQuestions: true, // read Claude's stated reasoning from the local transcript
   pinnedTopics: [],
+  // Claude writes technical questions about each change and the project, in the
+  // background with `claude -p` on your own plan, using a cheap model. Code
+  // excerpts are sent to Claude: set model.enabled false for confidential code.
   model: {
-    enabled: false,
+    enabled: true,
     provider: 'claude-cli', // 'claude-cli' (claude -p) or 'api' (ANTHROPIC_API_KEY)
     model: 'claude-haiku-5-5',
-    perHour: 6,
+    perHour: 30, // model calls per hour; a batch of project questions is 2 (write + blind check)
     showExcerpts: true,
   },
   theme: 'auto',

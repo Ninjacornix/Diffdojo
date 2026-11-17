@@ -1,6 +1,6 @@
 // Tests for the in-app UI (hooks/ui.tsx), run with `claude plugin test .`.
 // The DiffDojo CLI is faked under `$.process.run`, so these never touch disk.
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const QUESTION = {
   id: 7,
@@ -63,11 +63,21 @@ const BAND = (surface: 'terminal' | 'desktop', isWorking: boolean) =>
     props: { hasSurvey: false, isCollapsed: false, isWorking },
   }) as const
 
-async function boot($: any, on: any) {
+/** Starts a session; `toasts` collects what the plugin toasted. Settles the start's background sync. */
+async function boot($: any, on: any, toasts: string[] = []) {
+  const clock = mock.clock(on)
   on('command.register', () => ({ value: { command: 'dojo' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.toast', (_: unknown, e: any) => {
+    toasts.push(String(e.text ?? ''))
+    return { value: undefined }
+  })
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  return clock
 }
 
 test('while Claude works the band shows the question and grades a typed answer', async ($, on) => {
@@ -195,4 +205,189 @@ test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
   await ui.select({ key: 'q-11', value: 'a' })
   expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits MILAN for 15/ })).toBeTruthy()
   await ui.unmount()
+})
+
+// ---------------- battle outside a git repository ----------------
+
+/** The CLI as it answers in a folder with no git: no repo, but battles allowed. */
+function fakeNoGit(on: any, { startState = FIGHT as unknown } = {}) {
+  const calls: string[][] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: false, battleAllowed: true, queued: 0, header: '' }
+    if (args[0] === 'battle-state') body = { ...body, battle: true, state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
+    if (args[0] === 'battle-start') body = startState ? { state: startState } : {}
+    if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  return calls
+}
+
+test('battle: a prompt opens the fight even outside a git repository', async ($, on) => {
+  fakeNoGit(on)
+  const opened: any[] = []
+  const clock = mock.clock(on)
+  on('command.register', () => ({ value: { command: 'dojo' } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.open', (_: unknown, e: any) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('prompt.submit', (_: unknown, e: any) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  await $.prompt.submit({ text: 'can you make simple a star bfs etc' })
+  await clock.settle()
+  expect(opened.some(o => o.id === 'dojo-battle')).toBe(true)
+  // A slash command does not open it a second time on its own.
+  opened.length = 0
+  await $.prompt.submit({ text: '/dojo', command: { name: 'dojo', args: '' } } as any)
+  await clock.settle()
+  expect(opened.some(o => o.id === 'dojo-battle')).toBe(false)
+})
+
+test('battle: a failed start stays on the menu with a toast instead of silently resetting', async ($, on) => {
+  fakeNoGit(on, { startState: null })
+  const toasts: string[] = []
+  await boot($, on, toasts)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'easy' })
+  expect(toasts.some(t => /could not start/.test(t))).toBe(true)
+  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('battle: picking a mode outside a git repository starts the fight', async ($, on) => {
+  const calls = fakeNoGit(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'endless' })
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'endless')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---------------- No Mercy ----------------
+
+/** The CLI with No Mercy on: one gate whose right answer is "heap". */
+function fakeGate(on: any, { noMercy = true, gate = true } = {}) {
+  const calls: string[][] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', noMercy }
+    if (args[0] === 'battle-state') body = { ...body, battle: false, state: { phase: 'menu', mode: null } }
+    if (args[0] === 'gate')
+      body = gate
+        ? { id: 42, file: 'sched.py', prompt: 'What is `jobs`?', code: 'heapq.heappush(self.jobs, job)', options: ['dict', 'heap', 'set', 'tuple'] }
+        : { skip: 'no question for README.md (not code)' }
+    if (args[0] === 'gate-answer') body = { ...body, correct: args[2] === 'heap', xp: 10, answerText: 'heap', explanation: 'heapq keeps the list a binary heap.' }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  return calls
+}
+
+/** Answers the question dialog with `label`; records whether the edit itself ran. */
+function person(on: any, label: string | null) {
+  const seen = { asked: [] as string[], applied: false }
+  on('tool.call', { tool: 'AskUserQuestion' }, (_: unknown, e: any) => {
+    const q = e.questions[0]
+    seen.asked.push(q.question)
+    if (label === null) return { deny: 'dismissed' }
+    return { result: { questions: e.questions, answers: { [q.question]: label } } }
+  })
+  on('tool.call', { tool: 'Edit' }, () => {
+    seen.applied = true
+    return { result: { filePath: '/p/sched.py' } }
+  })
+  return seen
+}
+
+const EDIT = { tool: 'Edit', file_path: '/p/sched.py', old_string: 'x = 1', new_string: 'x = 2' }
+
+test('no mercy: a right answer lets the edit through', async ($, on) => {
+  const calls = fakeGate(on)
+  const seen = person(on, 'heap')
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.asked[0]).toContain('What is `jobs`?')
+  expect(seen.asked[0]).toContain('heapq.heappush')
+  expect(seen.asked[0]).toContain('SKYNET intercepts')
+  expect(calls.some(c => c[0] === 'gate-answer' && c[1] === '42' && c[2] === 'heap')).toBe(true)
+  expect(seen.applied).toBe(true)
+  expect(r.deny).toBeUndefined()
+})
+
+test('no mercy: a wrong answer rejects the edit and tells Claude to stop', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, 'dict')
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.applied).toBe(false)
+  expect(String(r.deny ?? r.text)).toContain('Stop working')
+})
+
+test('no mercy: closing the question counts as wrong', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, null)
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.applied).toBe(false)
+  expect(String(r.deny ?? r.text)).toContain('rejected')
+})
+
+test('no mercy: off, or a file with no question, never asks', async ($, on) => {
+  const calls = fakeGate(on, { noMercy: false })
+  const seen = person(on, 'heap')
+  await boot($, on)
+  await $.tool.call(EDIT as any)
+  expect(seen.asked.length).toBe(0)
+  expect(seen.applied).toBe(true)
+  expect(calls.some(c => c[0] === 'gate')).toBe(false)
+})
+
+test('no mercy: an edit DiffDojo has no question for goes through', async ($, on) => {
+  fakeGate(on, { gate: false })
+  const seen = person(on, 'heap')
+  await boot($, on)
+  await $.tool.call(EDIT as any)
+  expect(seen.asked.length).toBe(0)
+  expect(seen.applied).toBe(true)
+})
+
+test('no mercy: /nomercy toggles the mode', async ($, on) => {
+  const calls = fakeGate(on, { noMercy: false })
+  person(on, 'heap')
+  await boot($, on)
+  const r: any = await $.command.run({ command: 'nomercy', args: 'on' } as any)
+  expect(String(r.text)).toContain('No Mercy is on')
+  expect(String(r.text)).toContain('SKYNET')
+  expect(calls.some(c => c.join(' ').includes('config set noMercy true --global') || (c[0] === 'config' && c[2] === 'noMercy'))).toBe(true)
+})
+
+// ---------------- Claude writes the questions ----------------
+
+test('the first session says once that Claude writes the questions, and how to keep a project local', async ($, on) => {
+  const calls: string[][] = []
+  const logs: string[] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', battle: false, noMercy: false }
+    if (args[0] === 'status') body = { ...body, modelNotice: !calls.some(c => c[0] === 'model-notice-ack'), model: 'claude-haiku-5-5' }
+    if (args[0] === 'battle-state') body = { ...body, state: { phase: 'menu', mode: null } }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  on('ui.log', (_: unknown, e: any) => {
+    logs.push(String(e.text ?? ''))
+    return { value: undefined }
+  })
+  await boot($, on)
+  expect(logs.some(l => l.includes('claude-haiku-5-5') && l.includes('model.enabled false'))).toBe(true)
+  expect(calls.some(c => c[0] === 'model-notice-ack')).toBe(true)
 })

@@ -9,6 +9,8 @@ const { spawnSync } = require('child_process');
 function isolate() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-home-'));
   process.env.DIFFDOJO_HOME = home;
+  // Tests never call the real Claude: the model path (on by default) is off unless a test turns it on.
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ model: { enabled: false } }));
   delete process.env.DIFFDOJO_DB;
   delete process.env.DIFFDOJO_CHILD;
   return home;

@@ -217,6 +217,29 @@ async function generate(opts) {
     return { ...f, structure };
   });
 
+  // ---- Claude's questions about the change and the project (the main course).
+  // A cheap model writes them in the background; a blind second call checks them.
+  const projectQs = [];
+  if (files.length && total > 0 && Date.now() < deadline && model.available(db, cfg).ok) {
+    const hunks = changeHunks(fileInfos, cfg);
+    if (hunks.length) {
+      const count = Math.min(3, total);
+      const qs = await model.projectQuestions(db, cfg, {
+        hunks,
+        project: { files: git.listFiles(root).filter((f) => !matchesAny(f, cfg.deny)), topics: [...scores.keys()] },
+        count,
+      });
+      for (const q of qs.slice(0, count)) projectQs.push(projectQuestion(q, fileInfos, hunks));
+    }
+  }
+  // They take the place of DiffDojo's own code and design questions first.
+  let fromProject = projectQs.length;
+  for (const fam of ['code', 'design']) {
+    const take = Math.min(want[fam] || 0, fromProject);
+    want[fam] = (want[fam] || 0) - take;
+    fromProject -= take;
+  }
+
   // Code units (kept for exams, boss fights and audits)
   const units = [];
   for (const fn of allFunctions.filter((f) => f.changed)) {
@@ -264,9 +287,9 @@ async function generate(opts) {
         } else pool.push(...design.whyQs(ctx, rat, rnd));
       }
     }
-    // Algorithm / complexity via model path (half XP, model-checked)
+    // Algorithm / complexity via model path (half XP, model-checked); skipped when Claude's questions already cover the change
     const avail = model.available(db, cfg);
-    if (avail.ok && Date.now() < deadline) {
+    if (avail.ok && !projectQs.length && Date.now() < deadline) {
       const fn = shuffle(allFunctions.filter((f) => f.changed && f.end - f.start >= 5 && f.end - f.start <= cfg.maxExcerptLines && !hasSecret(f.code)), rnd)[0];
       if (fn) {
         const kind = rnd() < 0.5 ? 'algorithm' : 'complexity';
@@ -370,9 +393,10 @@ async function generate(opts) {
   }
 
   // ---- Store
+  created.project = projectQs;
   let n = 0;
   db.tx(() => {
-    for (const fam of ['design', 'code', 'questionnaire']) {
+    for (const fam of ['project', 'design', 'code', 'questionnaire']) {
       for (const q0 of created[fam]) {
         const q = clean(q0, cfg);
         if (!q) continue;
@@ -382,6 +406,53 @@ async function generate(opts) {
     }
   });
   return { questions: n, files: files.length, units: units.length, topics: [...scores.keys()], batch };
+}
+
+/** Changed code with a little context, for the model: secret-free, at most ~160 lines in all. */
+function changeHunks(fileInfos, cfg, { context = 3, maxLines = 160 } = {}) {
+  const hunks = [];
+  let left = maxLines;
+  for (const f of fileInfos) {
+    if (left <= 0) break;
+    const lines = f.src.split('\n');
+    const added = [...f.added].sort((a, b) => a - b);
+    let i = 0;
+    while (i < added.length && left > 0) {
+      let start = Math.max(1, added[i] - context);
+      let end = Math.min(lines.length, added[i] + context);
+      while (i + 1 < added.length && added[i + 1] - context <= end + 1) {
+        i++;
+        end = Math.min(lines.length, added[i] + context);
+      }
+      i++;
+      end = Math.min(end, start + left - 1);
+      const code = lines.slice(start - 1, end).join('\n');
+      if (!code.trim() || hasSecret(code)) continue;
+      hunks.push({ file: f.file, lang: f.lang, start, end, code });
+      left -= end - start + 1;
+    }
+  }
+  return hunks;
+}
+
+/** A model-written question as a stored row, showing the lines it is about. */
+function projectQuestion(q, fileInfos, hunks) {
+  const fi = fileInfos.find((f) => f.file === q.file) || fileInfos.find((f) => f.file === hunks[0].file);
+  const lines = fi.src.split('\n');
+  let start = Number.isInteger(q.line_start) && q.line_start >= 1 && q.line_start <= lines.length ? q.line_start : hunks[0].start;
+  let end = Number.isInteger(q.line_end) && q.line_end >= start ? Math.min(q.line_end, lines.length) : start;
+  if (end - start > 13) end = start + 13;
+  start = Math.max(1, start - (end - start < 2 ? 1 : 0));
+  end = Math.min(lines.length, end + (end - start < 3 ? 1 : 0));
+  const xp = { easy: 5, medium: 8, hard: 10 }[q.difficulty] || 8;
+  return {
+    family: 'code', type: 'project', format: 'choice', topic: `${lang.trackFor(fi.lang) || 'general'}/project`, track: lang.trackFor(fi.lang) || null,
+    difficulty: q.difficulty, grading: 'model', xp, est_seconds: 60, title: "Code · Claude's question about the change",
+    prompt: q.question, choices: q.choices, answer: q.answer, explanation: q.explanation,
+    code: lines.slice(start - 1, end).join('\n'), code_lang: fi.lang, code_file: fi.file, code_start: start, code_end: end,
+    evidence: 'written by Claude about this change, confirmed by a blind second answer',
+    meta: { generatedBy: 'model', selectedBy: "Claude's change", line: start },
+  };
 }
 
 /** Called from the Stop hook (and `diffdojo generate`). */
@@ -429,4 +500,4 @@ async function onStop({ root, repoId, sessionId, transcriptPath, lastAssistantMe
   });
 }
 
-module.exports = { generate, onStop, startSession, loadSession, saveSession, readEvents, eventsFile, collect, withLock, mixCounts };
+module.exports = { changeHunks, projectQuestion, generate, onStop, startSession, loadSession, saveSession, readEvents, eventsFile, collect, withLock, mixCounts };

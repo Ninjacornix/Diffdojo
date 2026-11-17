@@ -33,15 +33,24 @@ guard('on-edit', () => {
   // Questions while Claude works: generate in the background from the edits
   // so far, at most once per MID_TURN_MS. The Stop hook covers the rest.
   if (cfg.quiet || process.env.DIFFDOJO_NO_MIDTURN === '1') return;
-  const mark = path.join(dir, 'last-midturn');
-  let last = 0;
+  // Claude often edits several files at once, so these hooks run side by side:
+  // claiming the slot with an exclusive create means only one of them spawns.
+  const mark = path.join(dir, 'midturn.lock');
   try {
-    last = fs.statSync(mark).mtimeMs;
+    if (Date.now() - fs.statSync(mark).mtimeMs < MID_TURN_MS) return;
+    // Stale: the window has passed. A rename is atomic, so of several hooks
+    // here only one moves it away and the exclusive create below still decides.
+    const old = `${mark}.${process.pid}`;
+    fs.renameSync(mark, old);
+    fs.rmSync(old, { force: true });
   } catch {
-    /* never ran */
+    /* no lock yet */
   }
-  if (Date.now() - last < MID_TURN_MS) return;
-  fs.writeFileSync(mark, new Date().toISOString());
+  try {
+    fs.closeSync(fs.openSync(mark, 'wx'));
+  } catch {
+    return; // another hook claimed this window
+  }
   const job = path.join(util.ensureDir(path.join(dir, 'pending')), `edit-${Date.now()}-${process.pid}.json`);
   fs.writeFileSync(job, JSON.stringify({ root: c.root, repoId: c.repoId, sessionId: c.sessionId, transcriptPath: c.input.transcript_path || null, lastAssistantMessage: null }));
   const { spawn } = require('child_process');

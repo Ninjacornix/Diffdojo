@@ -2,14 +2,69 @@
 // Git helpers. Snapshots capture the full working tree (tracked + untracked,
 // respecting .gitignore) as a tree object using a throwaway index file, so the
 // user's real index and stash are never touched.
+//
+// A project folder without git of its own is tracked through a shadow
+// repository in ~/.diffdojo/<id>/shadow.git with the folder as its work tree:
+// the same commands work, and nothing is ever written into the folder.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { run } = require('./util');
+const { run, shadowGitDir } = require('./util');
+
+// Never snapshotted in a shadow-tracked folder (a real repo's .gitignore decides there).
+const SHADOW_EXCLUDE = [
+  '.git/', 'node_modules/', '.venv/', 'venv/', 'env/', '__pycache__/', '.tox/', '.mypy_cache/', '.pytest_cache/',
+  'build/', 'dist/', 'out/', 'target/', 'bin/Debug/', 'bin/Release/', 'obj/', '.next/', '.cache/', 'coverage/',
+  '.idea/', '.vs/', '.vscode/', '.DS_Store', 'Thumbs.db', '*.exe', '*.dll', '*.so', '*.dylib', '*.o', '*.obj',
+  '*.pyc', '*.class', '*.jar', '*.zip', '*.gz', '*.tar', '*.7z', '*.iso', '*.mp4', '*.mov', '*.mp3', '*.pdf',
+  '*.png', '*.jpg', '*.jpeg', '*.gif', '*.psd', '*.sqlite', '*.db', '*.log', '.env*', '*.pem', '*.key',
+];
+const SHADOW_MAX_FILES = 20000;
+
+/** Count files under `dir` (skipping excluded folders), stopping past `limit`. */
+function countFiles(dir, limit) {
+  const skip = new Set(SHADOW_EXCLUDE.filter((p) => p.endsWith('/') && !p.includes('*')).map((p) => p.slice(0, -1)));
+  let n = 0;
+  const stack = [dir];
+  while (stack.length && n <= limit) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (!skip.has(e.name)) stack.push(path.join(cur, e.name));
+      } else if (++n > limit) break;
+    }
+  }
+  return n;
+}
+
+/** Create the shadow repository on first use. False when the folder is too big to track. */
+function ensureShadow(root, gd) {
+  if (fs.existsSync(path.join(gd, 'HEAD'))) return true;
+  if (countFiles(root, SHADOW_MAX_FILES) > SHADOW_MAX_FILES) return false;
+  fs.mkdirSync(gd, { recursive: true });
+  if (run('git', ['init', '-q', '--bare', gd], { timeout: 30000 }).code !== 0) return false;
+  fs.mkdirSync(path.join(gd, 'info'), { recursive: true });
+  fs.writeFileSync(path.join(gd, 'info', 'exclude'), SHADOW_EXCLUDE.join('\n') + '\n');
+  return true;
+}
+
+/** The environment that points git at a folder's shadow repository, or {} for a real repo. */
+function repoEnv(root) {
+  const gd = shadowGitDir(root);
+  if (!gd) return {};
+  if (!ensureShadow(root, gd)) return { GIT_DIR: path.join(gd, 'too-large'), GIT_WORK_TREE: root };
+  return { GIT_DIR: gd, GIT_WORK_TREE: root };
+}
 
 function git(root, args, opts = {}) {
-  return run('git', ['-c', 'core.quotepath=off', ...args], { cwd: root, timeout: opts.timeout || 60000, env: opts.env });
+  return run('git', ['-c', 'core.quotepath=off', ...args], { cwd: root, timeout: opts.timeout || 60000, input: opts.input, env: { ...repoEnv(root), ...(opts.env || {}) } });
 }
 
 function toplevel(cwd) {
@@ -48,7 +103,7 @@ function snapshot(root) {
 }
 
 function emptyTree(root) {
-  const r = run('git', ['hash-object', '-t', 'tree', '-w', '--stdin'], { cwd: root, input: '' });
+  const r = git(root, ['hash-object', '-t', 'tree', '-w', '--stdin'], { input: '' });
   return r.stdout.trim() || '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 }
 
@@ -139,4 +194,4 @@ function parseDiff(text) {
   return files.filter((f) => f.file);
 }
 
-module.exports = { git, toplevel, head, snapshot, baseTree, emptyTree, diff, changedFiles, showFile, listFiles, parseDiff };
+module.exports = { repoEnv, git, toplevel, head, snapshot, baseTree, emptyTree, diff, changedFiles, showFile, listFiles, parseDiff };

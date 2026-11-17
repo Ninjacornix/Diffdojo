@@ -1,6 +1,8 @@
 {
   "name": "diffdojo",
-  "owner": { "name": "Ninjacornix" },
+  "owner": {
+    "name": "Ninjacornix"
+  },
   "metadata": {
     "description": "DiffDojo: learn from the code Claude writes, while it writes it."
   },
@@ -8,7 +10,7 @@
     {
       "name": "diffdojo",
       "source": "./",
-      "description": "Questions, a retro quiz battle and belts about the code Claude just wrote. Local only.",
+      "description": "Questions, a retro quiz battle and belts about the code Claude just wrote.",
       "category": "learning",
       "homepage": "https://github.com/Ninjacornix/Diffdojo"
     }
