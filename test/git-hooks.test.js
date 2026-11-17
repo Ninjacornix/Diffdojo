@@ -52,7 +52,8 @@ test('snapshots never write into the repository\'s .git, and leave very large fi
       }
     };
     walk(path.join(repo, '.git', 'objects'));
-    return out.sort();
+    // Only objects and packs: git's own background maintenance may create and drop lock files here.
+    return out.filter((f) => /[\\/][0-9a-f]{2}[\\/][0-9a-f]{38}$|\.(pack|idx)$/.test(f)).sort();
   };
   const before = objects();
   write(repo, 'new.py', 'def f():\n    return 1\n');
