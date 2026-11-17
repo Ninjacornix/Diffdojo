@@ -99,7 +99,9 @@ test('predict-the-output: typed pure functions only, answers recorded by running
   const p = buildPredict(clamp, 'python', s, src);
   assert.ok(p);
   const args = p.call.match(/clamp\((.*)\)/)[1].split(',').map(Number);
-  assert.strictEqual(Number(p.output), Math.min(Math.max(args[0], args[1]), args[2]));
+  // The fixture's clamp as written: lo is checked first, so lo > hi returns lo (min/max would say hi).
+  const [x, lo, hi] = args;
+  assert.strictEqual(Number(p.output), x < lo ? lo : x > hi ? hi : x, `${p.call} -> ${p.output}`);
   const sched = analyze(fixture('scheduler.py'), 'python');
   assert.strictEqual(buildPredict(sched.functions.find((f) => f.name === 'due'), 'python', sched, fixture('scheduler.py')), null, 'methods are skipped');
   // Equivalent mutant detection: clamp's `x < lo` -> `x <= lo` returns lo either way.
