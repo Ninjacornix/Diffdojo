@@ -1,0 +1,38 @@
+name: Release
+
+# When main gets a version (package.json) that has no tag yet, tag it v<version>
+# and publish a GitHub Release with that version's section of CHANGELOG.md.
+# Bump the version in a PR; merging it is the release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Tag and release the version in package.json, if it is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "v$v is already released."
+            exit 0
+          fi
+          node scripts/release-notes.js "$v" > notes.md
+          gh release create "v$v" --target "$GITHUB_SHA" --title "DiffDojo $v" --notes-file notes.md
