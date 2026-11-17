@@ -44,6 +44,7 @@ const TROPHIES = {
   'battle-medium': 'Bug Squasher — cleared the Medium battle ladder',
   'battle-hard': 'Concurrency Tamer — cleared the Hard battle ladder',
   'evil-claude': 'Evil Claude Defeated — cleared the Professional battle ladder',
+  skynet: 'Judgment Averted — defeated SKYNET in No Mercy',
 };
 
 function beltIndex(b) {

@@ -65,7 +65,8 @@ function game(scene, { db, repoId, root, cfg, width, rnd = Math.random }) {
     anim: null,
     message: null,
   };
-  if (g.view.mode && g.view.phase === 'fight') g.phase = 'intro';
+  // A No Mercy fight belongs to Claude Code (SKYNET intercepts Claude's edits there): start at the menu.
+  if (g.view.mode && g.view.phase === 'fight' && !g.view.noHealth) g.phase = 'intro';
   const tick = () => Math.floor(g.frame / IDLE_EVERY);
 
   function nextQuestion() {

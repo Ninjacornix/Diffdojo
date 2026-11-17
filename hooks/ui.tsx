@@ -9,7 +9,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { DojoQuestion, DojoResult } from '../types'
 import { battleAutoStart, battleSessionStart, openBattle, registerBattle } from './battle'
-import { noMercySessionStart, registerNoMercy } from './nomercy'
+import { noMercySessionStart, noMercyTurnComplete, registerNoMercy } from './nomercy'
 
 const PANE = 'diffdojo'
 const KEYS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -166,6 +166,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, nextHook) => {
     const r = await nextHook(e)
     await update($, working, () => false)
+    await noMercyTurnComplete($, e)
     poll?.cancel()
     // Questions about this turn are generated in the background over the next ~10-60 s.
     poll = $.clock.every(20000, () => refresh($))

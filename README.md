@@ -37,7 +37,7 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 
 - **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses). Pick **RUN** under the answers to end the battle and go back to the menu.
 - **Health is a token budget.** Every hit burns tokens, and you see them fall out of the bar: `▁def`, `await`, `##ing`, `</s>`... Beat an enemy and your tokens are fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
-- **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst) and **Endless** (waves get stronger; your best wave is recorded).
+- **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst), **Endless** (waves get stronger; your best wave is recorded) and **No Mercy** (SKYNET, below).
 - **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, token bars drain while tokens spill out, and the text box arrow blinks.
 - **Questions about Claude's code** are generated in the background while it works (from each edit, and again when the turn ends), and they show up in the fight: Professional mode asks them first.
 - Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
@@ -47,21 +47,16 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 
 **The fight didn't open when I sent a prompt?** Check that battle mode is on (`/battle on`) and DiffDojo isn't stopped in that project (`/diffdojo:start`). In a narrow terminal Claude Code may hold back panes a plugin opens by itself: type `/battle` to open it, or widen the window.
 
-## No Mercy mode
+## No Mercy: fight SKYNET
 
-For when you really want to keep up with Claude: **every edit waits for you.** No Mercy's boss, **SKYNET**, stands between Claude and your files. Before Claude's change reaches the file, SKYNET asks you one question about that exact change, in Claude Code's own question dialog:
+A battle mode for when you really want to keep up with Claude. **SKYNET** has no health bar, and neither do you. Its ability: **it intercepts every edit Claude makes for your prompt.** Before the change reaches the file, SKYNET asks you one question about that exact change, in Claude Code's own question dialog:
 
 - *Which line did Claude write here?* The new code with one line hidden, the real line among look-alikes (`<` vs `<=`, swapped names, off-by-one numbers).
 - *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.
 
-**Answer right**, you beat SKYNET and the edit goes through (with XP). **Answer wrong, or close the question,** SKYNET wins: the edit is rejected and Claude stops working, so you can look at what it was doing before you let it go on.
+**Answer right** and the edit goes through (with XP). **Answer wrong, or close the question, and you lose on the spot:** the edit is rejected and Claude stops working, so you can look at what it was doing. **SKYNET falls when Claude finishes your prompt** with every edit answered, which earns the *Judgment Averted* trophy.
 
-Turn it on from the battle menu (**No Mercy**, which shows SKYNET and an on/off switch), or with a command:
-
-```
-/nomercy on     # in Claude Code
-/nomercy off
-```
+Pick **No Mercy** in the battle menu (or type `/nomercy`). SKYNET's screen shows this warning first; choose **Fight SKYNET**, then send your prompt. **RUN** or `/nomercy off` ends the fight, and Claude edits freely again. Between edits SKYNET just watches: there are no other questions in this fight.
 
 Edits to non-code files (Markdown, JSON...) pass without a question. If something goes wrong building a question, the edit goes through rather than blocking your work.
 
@@ -158,7 +153,7 @@ Questions about a change appear shortly after Claude finishes it; in between, yo
 |---|---|
 | `/dojo` (in Claude Code) | Open the quiz pane beside the chat |
 | `/battle` (in Claude Code) | Open the battle; `/battle menu`, `/battle off` |
-| `/nomercy on` (in Claude Code) | Answer a question before each of Claude's edits is applied |
+| `/nomercy` (in Claude Code) | Fight SKYNET: answer for every edit Claude makes for your next prompt (`/nomercy off` ends it) |
 | `diffdojo quiz` | Answer your queued questions in a terminal |
 | `diffdojo quiz --topic networking` | Practice a topic — no Claude session needed |
 | `diffdojo stats` | Your belts, XP, accuracy, streak, trophies and projects — across everything (`--repo` for just this one) |

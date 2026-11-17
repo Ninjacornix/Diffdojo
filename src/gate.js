@@ -230,7 +230,7 @@ async function answer(db, id, response, { cfg, root } = {}) {
   const graded = await require('./grader').answer(db, q, key || r, { mode: 'gate', cfg, root });
   const g = readJson(gateFile(), null);
   if (g && g.id === q.id) fs.rmSync(gateFile(), { force: true });
-  return { correct: graded.correct === true, xp: graded.xp || 0, answerText: q.choices[q.answer], explanation: q.explanation || null, trophies: graded.trophies || [] };
+  return { correct: graded.correct === true, xp: graded.xp || 0, answerText: q.choices[q.answer], explanation: q.explanation || null, trophies: graded.trophies || [], difficulty: q.difficulty, file: q.code_file || null };
 }
 
 module.exports = { create, answer, proposed, changedLines };
