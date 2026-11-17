@@ -40,9 +40,25 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 - Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
 - You fight under your own name: your git user name, or your system username. Pick another with `diffdojo config set playerName "Alex" --global`.
 - In Claude Code: `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` switches back to the plain question box. Esc returns to your prompt.
-- Works in any folder, git or not. Outside a git repository there's no change to ask about, so the fight uses concept questions.
+- Works in any folder, git or not.
 
 **The fight didn't open when I sent a prompt?** Check that battle mode is on (`/battle on`) and DiffDojo isn't stopped in that project (`/diffdojo:start`). In a narrow terminal Claude Code may hold back panes a plugin opens by itself: type `/battle` to open it, or widen the window.
+
+## No Mercy mode
+
+For when you really want to keep up with Claude: **every edit waits for you.** Before Claude's change reaches the file, DiffDojo asks one question about that exact change, in Claude Code's own question dialog:
+
+- *Which line did Claude write here?* The new code with one line hidden, the real line among look-alikes (`<` vs `<=`, swapped names, off-by-one numbers).
+- *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.
+
+**Answer right** and the edit goes through (with XP). **Answer wrong, or close the question,** and the edit is rejected and Claude stops working, so you can look at what it was doing before you let it go on.
+
+```
+/nomercy on     # in Claude Code
+/nomercy off
+```
+
+Edits to non-code files (Markdown, JSON...) pass without a question. If something goes wrong building a question, the edit goes through rather than blocking your work.
 
 ## Try it without prompting Claude
 
@@ -93,7 +109,7 @@ For the terminal commands (`diffdojo quiz`, `diffdojo battle`, `diffdojo demo`) 
 
 **3. That's it — it's already on**
 
-DiffDojo starts automatically in every git project you open with the plugin enabled; there's nothing to switch on. Your XP, belts and trophies are tracked across all your projects (`diffdojo stats` shows them, plus a list of every project).
+DiffDojo starts automatically in every project you open with the plugin enabled, **git or not**; there's nothing to switch on. In a folder without git, DiffDojo tracks Claude's changes with a private shadow repository in `~/.diffdojo/`, so nothing is ever written into your folder. (It skips your home folder and drive roots: open Claude Code in a project folder.) Your XP, belts and trophies are tracked across all your projects (`diffdojo stats` shows them, plus a list of every project).
 
 Optional: tell it how to run a project's tests, which unlocks more question types:
 
@@ -136,6 +152,8 @@ Questions about a change appear shortly after Claude finishes it; in between, yo
 | Command | What it does |
 |---|---|
 | `/dojo` (in Claude Code) | Open the quiz pane beside the chat |
+| `/battle` (in Claude Code) | Open the battle; `/battle menu`, `/battle off` |
+| `/nomercy on` (in Claude Code) | Answer a question before each of Claude's edits is applied |
 | `diffdojo quiz` | Answer your queued questions in a terminal |
 | `diffdojo quiz --topic networking` | Practice a topic — no Claude session needed |
 | `diffdojo stats` | Your belts, XP, accuracy, streak, trophies and projects — across everything (`--repo` for just this one) |
@@ -155,7 +173,7 @@ Run `diffdojo help` for everything else.
 
 ## Your data stays yours
 
-- **Your choice where it runs.** It's on in every git project by default; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
+- **Your choice where it runs.** It's on in every project folder by default, git or not; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
 - **Local only.** Everything is stored in `~/.diffdojo/` — never in your repo, never uploaded.
 - **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
 - **Never talks to Claude.** Nothing is ever injected into your conversation.

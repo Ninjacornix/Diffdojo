@@ -68,7 +68,7 @@ function color(flags) {
 function repoContext({ require: must = false } = {}) {
   const root = util.findRepoRoot(process.cwd());
   if (!root) {
-    if (must) throw new Error('Not inside a git repository. DiffDojo works per repository (non-git directories are not supported).');
+    if (must) throw new Error('Not inside a project folder. DiffDojo works in any folder except your home folder and a drive root.');
     return { root: null, repoId: null };
   }
   return { root, repoId: util.repoId(root) };
@@ -122,7 +122,7 @@ const commands = {
 
   status() {
     const { root, repoId } = repoContext();
-    if (!root) return console.log('Not in a git repository.');
+    if (!root) return console.log('Not in a project folder (DiffDojo skips your home folder and drive roots).');
     const d = db();
     const enabled = util.isEnabled(repoId);
     const queue = require('./queue');
@@ -347,7 +347,7 @@ const commands = {
 
   purge({ flags }) {
     const { repoId } = repoContext();
-    if (flags.repo && !repoId) return console.log('Not in a git repository.');
+    if (flags.repo && !repoId) return console.log('Not in a project folder (DiffDojo skips your home folder and drive roots).');
     if (!flags.yes) return console.log(`This deletes ${flags.repo ? 'all DiffDojo data for this repository' : 'ALL DiffDojo data (progress, belts, trophies, questions)'}. Re-run with --yes to confirm.`);
     const r = require('./data').purge(db(), { repoId: flags.repo ? repoId : null });
     console.log(`Deleted ${r.removed}`);
@@ -356,16 +356,18 @@ const commands = {
   /**
    * Machine interface for the in-app UI (hooks/ui.tsx): one JSON object on stdout.
    *   api status | next | fill | answer <id> <response...> | skip <id> | snooze <id> | bad <id>
+   *   api gate (tool call JSON on stdin) | gate-answer <id> <label or letter>   (No Mercy)
+   *   api battle-state | battle-start <mode> | battle-question | battle-answer <a-d> | battle-quit | battle-resume
    */
   async api({ pos }) {
     const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
     const { root, repoId } = repoContext();
     const enabled = !!(repoId && util.isEnabled(repoId));
     const sub = pos[1] || 'status';
-    // Battles also run outside git repositories (concept questions only), unless
+    // Battles also run where there is no project (home folder, drive root), on concept questions, unless
     // DiffDojo was switched off for this repo or globally (autoEnable: false).
     const battleAllowed = root ? enabled : util.autoEnable();
-    if (!root && !sub.startsWith('battle') && sub !== 'status') return out({ enabled: false, battleAllowed, queued: 0, question: null });
+    if (!root && !sub.startsWith('battle') && !sub.startsWith('gate') && sub !== 'status') return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
@@ -375,11 +377,33 @@ const commands = {
       const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
       return { enabled, battleAllowed, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
     };
-    if (sub === 'status') return out({ ...status(), battle: config.load(repoId).battle });
+    if (sub === 'status') return out({ ...status(), battle: config.load(repoId).battle, noMercy: !!config.load(repoId).noMercy });
+    if (sub === 'gate') {
+      // No Mercy: a question about the edit in the tool call on stdin.
+      const cfg = config.load(repoId);
+      if (!cfg.noMercy) return out({ skip: 'No Mercy is off' });
+      if (root && !enabled) return out({ skip: 'DiffDojo is stopped here' });
+      let input;
+      try {
+        input = JSON.parse(util.readStdin() || '{}');
+      } catch {
+        return out({ skip: 'unreadable tool call' });
+      }
+      try {
+        return out(require('./gate').create(d, input, { root: root || process.cwd(), repoId }));
+      } catch (e) {
+        util.log('gate', e);
+        return out({ skip: `no question: ${e.message}` });
+      }
+    }
+    if (sub === 'gate-answer') {
+      const r = await require('./gate').answer(d, pos[2], pos.slice(3).join(' '), { cfg: config.load(repoId), root });
+      return out({ ...r, ...status() });
+    }
     if (sub.startsWith('battle')) {
       const battle = require('./battle');
       try {
-        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, state: battle.view() });
+        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, noMercy: !!config.load(repoId).noMercy, state: battle.view() });
         if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2])) });
         if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
         if (sub === 'battle-resume') return out({ state: battle.view(battle.resume()) });

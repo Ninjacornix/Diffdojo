@@ -39,7 +39,7 @@ function ensureDir(d) {
 }
 
 /** Walk up from `start` looking for a `.git` entry (dir or file). Pure fs, no git spawn. */
-function findRepoRoot(start) {
+function findGitRoot(start) {
   let dir = path.resolve(start || process.cwd());
   for (;;) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
@@ -50,10 +50,32 @@ function findRepoRoot(start) {
 }
 
 /**
+ * The project DiffDojo works in: the enclosing git repository, or else the
+ * folder itself (tracked through a shadow repository under ~/.diffdojo, see
+ * git.js). Never the home folder or a filesystem root, which are too broad to
+ * snapshot. Pure fs, no git spawn.
+ */
+function findRepoRoot(start) {
+  const dir = path.resolve(start || process.cwd());
+  const gitRoot = findGitRoot(dir);
+  if (gitRoot) return gitRoot;
+  if (path.dirname(dir) === dir) return null; // / or C:\
+  if (normPath(dir) === normPath(os.homedir())) return null;
+  if (normPath(dir) === normPath(home()) || normPath(dir).startsWith(normPath(home()) + '/')) return null; // DiffDojo's own data
+  return dir;
+}
+
+/** Shadow repository for a project folder that has no git of its own, else null. */
+function shadowGitDir(root) {
+  if (!root || fs.existsSync(path.join(root, '.git'))) return null;
+  return path.join(repoDir(repoId(root)), 'shadow.git');
+}
+
+/**
  * Is DiffDojo on for this repo? An explicit `/diffdojo:stop` (a `disabled`
  * marker) wins, then an explicit `/diffdojo:start`; otherwise the global
  * `autoEnable` setting decides, which is on by default: once the plugin is
- * enabled in Claude Code it runs in every git repository.
+ * enabled in Claude Code it runs in every project folder, git or not.
  */
 function isEnabled(id) {
   const d = repoDir(id);
@@ -222,7 +244,7 @@ function dayKey(d = new Date()) {
 }
 
 module.exports = {
-  cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled, autoEnable,
+  cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, findGitRoot, shadowGitDir, isEnabled, autoEnable,
   readJson, writeJson, log, run, runShell, which, readStdin, nowIso, slug,
   shuffle, pick, rng, dayKey,
 };

@@ -269,3 +269,100 @@ test('battle: picking a mode outside a git repository starts the fight', async (
   expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
   await ui.unmount()
 })
+
+// ---------------- No Mercy ----------------
+
+/** The CLI with No Mercy on: one gate whose right answer is "heap". */
+function fakeGate(on: any, { noMercy = true, gate = true } = {}) {
+  const calls: string[][] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', noMercy }
+    if (args[0] === 'battle-state') body = { ...body, battle: false, state: { phase: 'menu', mode: null } }
+    if (args[0] === 'gate')
+      body = gate
+        ? { id: 42, file: 'sched.py', prompt: 'What is `jobs`?', code: 'heapq.heappush(self.jobs, job)', options: ['dict', 'heap', 'set', 'tuple'] }
+        : { skip: 'no question for README.md (not code)' }
+    if (args[0] === 'gate-answer') body = { ...body, correct: args[2] === 'heap', xp: 10, answerText: 'heap', explanation: 'heapq keeps the list a binary heap.' }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  return calls
+}
+
+/** Answers the question dialog with `label`; records whether the edit itself ran. */
+function person(on: any, label: string | null) {
+  const seen = { asked: [] as string[], applied: false }
+  on('tool.call', { tool: 'AskUserQuestion' }, (_: unknown, e: any) => {
+    const q = e.questions[0]
+    seen.asked.push(q.question)
+    if (label === null) return { deny: 'dismissed' }
+    return { result: { questions: e.questions, answers: { [q.question]: label } } }
+  })
+  on('tool.call', { tool: 'Edit' }, () => {
+    seen.applied = true
+    return { result: { filePath: '/p/sched.py' } }
+  })
+  return seen
+}
+
+const EDIT = { tool: 'Edit', file_path: '/p/sched.py', old_string: 'x = 1', new_string: 'x = 2' }
+
+test('no mercy: a right answer lets the edit through', async ($, on) => {
+  const calls = fakeGate(on)
+  const seen = person(on, 'heap')
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.asked[0]).toContain('What is `jobs`?')
+  expect(seen.asked[0]).toContain('heapq.heappush')
+  expect(calls.some(c => c[0] === 'gate-answer' && c[1] === '42' && c[2] === 'heap')).toBe(true)
+  expect(seen.applied).toBe(true)
+  expect(r.deny).toBeUndefined()
+})
+
+test('no mercy: a wrong answer rejects the edit and tells Claude to stop', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, 'dict')
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.applied).toBe(false)
+  expect(String(r.deny ?? r.text)).toContain('Stop working')
+})
+
+test('no mercy: closing the question counts as wrong', async ($, on) => {
+  fakeGate(on)
+  const seen = person(on, null)
+  await boot($, on)
+  const r: any = await $.tool.call(EDIT as any)
+  expect(seen.applied).toBe(false)
+  expect(String(r.deny ?? r.text)).toContain('rejected')
+})
+
+test('no mercy: off, or a file with no question, never asks', async ($, on) => {
+  const calls = fakeGate(on, { noMercy: false })
+  const seen = person(on, 'heap')
+  await boot($, on)
+  await $.tool.call(EDIT as any)
+  expect(seen.asked.length).toBe(0)
+  expect(seen.applied).toBe(true)
+  expect(calls.some(c => c[0] === 'gate')).toBe(false)
+})
+
+test('no mercy: an edit DiffDojo has no question for goes through', async ($, on) => {
+  fakeGate(on, { gate: false })
+  const seen = person(on, 'heap')
+  await boot($, on)
+  await $.tool.call(EDIT as any)
+  expect(seen.asked.length).toBe(0)
+  expect(seen.applied).toBe(true)
+})
+
+test('no mercy: /nomercy toggles the mode', async ($, on) => {
+  const calls = fakeGate(on, { noMercy: false })
+  person(on, 'heap')
+  await boot($, on)
+  const r: any = await $.command.run({ command: 'nomercy', args: 'on' } as any)
+  expect(String(r.text)).toContain('No Mercy is on')
+  expect(calls.some(c => c.join(' ').includes('config set noMercy true --global') || (c[0] === 'config' && c[2] === 'noMercy'))).toBe(true)
+})

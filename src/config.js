@@ -16,11 +16,14 @@ const DEFAULT_DENY = [
 ];
 
 const DEFAULTS = {
-  // Global only: run in every git repository unless /diffdojo:stop was used there.
+  // Global only: run in every project folder (git or not) unless /diffdojo:stop was used there.
   // Set false to go back to per-repo opt-in with /diffdojo:start.
   autoEnable: true,
   // In-app battle mode: while Claude works, questions come as a turn-based fight. /battle off to use the plain question box.
   battle: true,
+  // No Mercy mode: before each of Claude's edits, answer a question about it.
+  // Right: the edit goes through. Wrong: it is rejected and Claude stops. /nomercy on|off
+  noMercy: false,
   // Name shown in battles; empty = git user name, else the system username.
   playerName: null,
   deny: DEFAULT_DENY,

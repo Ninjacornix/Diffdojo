@@ -1,11 +1,11 @@
 ---
 name: start
-description: Turn DiffDojo (back) on for the current git repository and optionally set its test command. DiffDojo already runs in every repo by default; this undoes /diffdojo:stop. Use when the user runs /diffdojo:start or asks to turn DiffDojo on.
+description: Turn DiffDojo (back) on for the current project folder and optionally set its test command. DiffDojo already runs in every repo by default; this undoes /diffdojo:stop. Use when the user runs /diffdojo:start or asks to turn DiffDojo on.
 argument-hint: "[test command]"
 allowed-tools: Bash(node:*), Read, Glob
 ---
 
-DiffDojo runs in every git repository automatically once the plugin is enabled. This command turns it back on here if `/diffdojo:stop` turned it off, and records the snapshot it diffs against.
+DiffDojo runs in every project folder (git or not) automatically once the plugin is enabled. This command turns it back on here if `/diffdojo:stop` turned it off, and records the snapshot it diffs against.
 
 1. Run:
    ```

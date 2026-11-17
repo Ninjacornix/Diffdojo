@@ -9,6 +9,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { DojoQuestion, DojoResult } from '../types'
 import { battleAutoStart, battleSessionStart, openBattle, registerBattle } from './battle'
+import { noMercySessionStart, registerNoMercy } from './nomercy'
 
 const PANE = 'diffdojo'
 const KEYS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -112,11 +113,13 @@ async function act($: Engine, q: DojoQuestion, what: 'skip' | 'snooze' | 'bad') 
 
 export const register: Register = on => {
   registerBattle(on)
+  registerNoMercy(on)
 
   on('session.start', async ($, e, nextHook) => {
     const started = await nextHook(e)
     await $.command.register({ name: 'dojo', description: 'Open the DiffDojo quiz pane (questions about what Claude just wrote)' })
     await battleSessionStart($)
+    await noMercySessionStart($)
     void refresh($)
     return started
   })
