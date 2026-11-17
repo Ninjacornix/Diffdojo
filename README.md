@@ -172,7 +172,9 @@ npm run pack-ci   # check every question pack and run its code snippets
 npm run lint      # syntax-check every source file
 ```
 
-CI runs these on Linux, macOS and Windows with Node 22 and 24. The design docs explain how it all fits together: [product requirements](docs/PRODUCT_REQUIREMENTS.md), [architecture](docs/ARCHITECTURE.md), [questions and grading](docs/QUESTIONS_AND_GRADING.md), [rewards](docs/REWARDS.md), [privacy and security](docs/PRIVACY_AND_SECURITY.md) and the [roadmap](docs/ROADMAP.md).
+CI runs these on Linux, macOS and Windows with Node 22 and 24.
+
+To release: bump `version` in `package.json` and `.claude-plugin/plugin.json`, add a `## <version>` section to `CHANGELOG.md`, and merge to `main`. A workflow then tags `v<version>` and publishes a GitHub Release with those notes, and `/plugin update` picks up the new version. The design docs explain how it all fits together: [product requirements](docs/PRODUCT_REQUIREMENTS.md), [architecture](docs/ARCHITECTURE.md), [questions and grading](docs/QUESTIONS_AND_GRADING.md), [rewards](docs/REWARDS.md), [privacy and security](docs/PRIVACY_AND_SECURITY.md) and the [roadmap](docs/ROADMAP.md).
 
 ## Status
 

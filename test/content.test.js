@@ -137,3 +137,14 @@ test('model path is off by default and rate-limited when on', () => {
   for (let i = 0; i < 2; i++) db.run("INSERT INTO gen_log(ts, kind) VALUES (?, 'model:why')", new Date().toISOString());
   assert.match(model.available(db, on).reason, /hourly model limit/);
 });
+
+test('release notes: the current version has a CHANGELOG section, printed with install steps', () => {
+  const { spawnSync } = require('child_process');
+  const version = require('../package.json').version;
+  assert.strictEqual(require('../.claude-plugin/plugin.json').version, version, 'package.json and plugin.json agree');
+  const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'release-notes.js'), version], { encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(r.stdout.trim().length > 40);
+  assert.ok(!/^## /m.test(r.stdout), 'only that version\'s section');
+  assert.match(r.stdout, /\/plugin install diffdojo --marketplace Ninjacornix\/Diffdojo/);
+});
