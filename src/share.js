@@ -6,7 +6,7 @@
 // Sharing again updates the same gist; --remove deletes it.
 
 const path = require('path');
-const { home, readJson, writeJson, which, nowIso, run } = require('./util');
+const { home, readJson, writeJson, which, nowIso, runTool } = require('./util');
 const stats = require('./stats');
 const badge = require('./badge');
 
@@ -75,12 +75,8 @@ function preview(db, opts = {}) {
 
 /** Run `gh` (a .cmd shim on some Windows installs), JSON on stdin. */
 function gh(args, input) {
-  const bin = which('gh');
-  if (!bin) return { code: -1, stdout: '', stderr: 'gh not found' };
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
-    return run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${bin}"`, ...args], { input, timeout: 60000 });
-  }
-  return run(bin, args, { input, timeout: 60000 });
+  if (!which('gh')) return { code: -1, stdout: '', stderr: 'gh not found' };
+  return runTool('gh', args, { input, timeout: 60000 });
 }
 
 const NO_GH = 'Sharing uses the GitHub CLI: install it from https://cli.github.com, run `gh auth login`, then share again.';

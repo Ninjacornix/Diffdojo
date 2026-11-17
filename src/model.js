@@ -8,7 +8,6 @@
 // the answer key for verified questions; model-answered questions are blind
 // checked by a second call and kept only if both agree.
 
-const { spawnSync } = require('child_process');
 const { run, which, log } = require('./util');
 const { hasSecret } = require('./secrets');
 
@@ -159,16 +158,7 @@ async function callApi(cfg, prompt, schema) {
  * holds only fixed flags.
  */
 function claudeRun(args, input) {
-  const bin = which('claude') || 'claude';
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
-    const line = [`"${bin}"`, ...args.map((a) => (a === '' ? '""' : /^[\w.:=-]+$/.test(a) ? a : `"${a}"`))].join(' ');
-    const r = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], {
-      input, encoding: 'utf8', timeout: 90000, windowsHide: true, windowsVerbatimArguments: true,
-      env: { ...process.env, DIFFDOJO_CHILD: '1' }, maxBuffer: 32 * 1024 * 1024,
-    });
-    return { code: r.status === null ? -1 : r.status, stdout: r.stdout || '', stderr: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
-  }
-  return run(bin, args, { input, timeout: 90000 });
+  return require('./util').runTool('claude', args, { input, timeout: 90000 });
 }
 
 function callCli(cfg, prompt, schema) {
