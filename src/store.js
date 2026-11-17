@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS xp_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, day TEXT NOT NULL, track TEXT NOT NULL,
   amount INTEGER NOT NULL, base INTEGER NOT NULL, reason TEXT, question_id INTEGER, repo_id TEXT
 );
+-- One row per question content that has paid XP (anti-farming: the same
+-- question re-created by a battle, Bug Hunter or Prepare pays once).
+CREATE TABLE IF NOT EXISTS xp_keys (key TEXT PRIMARY KEY, question_id INTEGER, awarded_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS belts (track TEXT PRIMARY KEY, belt TEXT NOT NULL, awarded_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS exams (
   id INTEGER PRIMARY KEY AUTOINCREMENT, track TEXT NOT NULL, target_belt TEXT NOT NULL,

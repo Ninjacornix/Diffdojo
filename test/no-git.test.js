@@ -67,7 +67,7 @@ test('scores: XP and accuracy across every project, current one marked', async (
     store.ensureRepo(db, dir, repoId, true);
     const id = store.insertQuestion(db, {
       repo_id: repoId, family: 'questionnaire', type: 'pack', format: 'choice', grading: 'verified', xp: 10, difficulty: 'easy',
-      prompt: 'Which?', choices: { a: 'one', b: 'two' }, answer: 'a', track: 'python',
+      prompt: `Which, in ${path.basename(dir)}, try ${right}?`, choices: { a: 'one', b: 'two' }, answer: 'a', track: 'python',
     });
     await grader.answer(db, store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', id)), right ? 'a' : 'b', { mode: 'normal' });
   };

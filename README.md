@@ -95,7 +95,9 @@ The biggest reward? **Catching a real bug in Claude's code** and proving it with
 
 Show it off with `diffdojo badge`, which makes a little SVG badge for your GitHub profile.
 
-**Share your score** (Scores → Share my score, or `diffdojo share`): DiffDojo shows the exact card first, then publishes it as a gist on your own GitHub account, through the [GitHub CLI](https://cli.github.com) (`gh auth login` once). It holds numbers only (XP, belts, streak, accuracy, trophies, battles cleared, how many projects) plus your badge, never code, questions or project names (`--projects` adds names). Sharing again updates the same gist; `diffdojo share --remove` deletes it; `--secret` makes it unlisted. Scores are self-reported.
+**Share your score** (Scores → Share my score, or `diffdojo share`): DiffDojo shows the exact card first, then publishes it as a gist on your own GitHub account, through the [GitHub CLI](https://cli.github.com) (`gh auth login` once). It holds numbers only (XP, belts, streak, accuracy, trophies, battles cleared, how many projects) plus your badge, never code, questions or project names (`--projects` adds names). Sharing again updates the same gist; `diffdojo share --remove` deletes it; `--secret` makes it unlisted.
+
+**Fair play:** each question pays XP once, however often it comes back (battles, Bug Hunter and Prepare can't be farmed), and practice XP is capped at 300 a day; questions about Claude's real changes aren't capped. Scores are still self-reported: the data lives on your machine, so anyone determined could edit it ([details](docs/REWARDS.md#what-this-cant-stop)).
 
 ---
 

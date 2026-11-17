@@ -117,11 +117,28 @@ function streakBonus(s) {
   return s >= 3 ? Math.min(0.5, 0.1 * (s - 2)) : 0;
 }
 
-/** Record XP. Streak bonus applies from day 3 (+10%/day, capped at +50%). */
-function award(db, { track, base, reason, questionId, repoId }) {
-  if (!base || base <= 0) return 0;
+// Practice (pack questions, battles' concept questions, Bug Hunter, prepared
+// topics) can be generated without end, so its XP is capped per day. XP from
+// questions about Claude's real changes is bounded by the real changes.
+const PRACTICE_XP_PER_DAY = 300;
+const PRACTICE_SQL = "(q.family = 'questionnaire' OR q.type IN ('pack', 'prepared', 'bug_fix'))";
+
+function isPractice(q) {
+  return q.family === 'questionnaire' || ['pack', 'prepared', 'bug_fix'].includes(q.type);
+}
+
+function practiceXpToday(db) {
+  return db.get(
+    `SELECT COALESCE(SUM(x.amount), 0) AS n FROM xp_events x JOIN questions q ON q.id = x.question_id WHERE x.day = ? AND ${PRACTICE_SQL}`,
+    dayKey(),
+  ).n;
+}
+
+/** Record XP (at most `max`). Streak bonus applies from day 3 (+10%/day, capped at +50%). */
+function award(db, { track, base, reason, questionId, repoId, max = Infinity }) {
+  if (!base || base <= 0 || max <= 0) return 0;
   const s = streak(db);
-  const amount = Math.round(base * (1 + streakBonus(s)));
+  const amount = Math.min(max, Math.round(base * (1 + streakBonus(s))));
   db.run(
     'INSERT INTO xp_events(ts, day, track, amount, base, reason, question_id, repo_id) VALUES (?,?,?,?,?,?,?,?)',
     nowIso(), dayKey(), track || 'general', amount, base, reason, questionId, repoId,
@@ -251,7 +268,7 @@ function finishExam(db, examId) {
 }
 
 module.exports = {
-  BELTS, THRESHOLDS, EXAMS, UNLOCKS, TROPHIES, RETAKE_HOURS,
+  BELTS, THRESHOLDS, EXAMS, UNLOCKS, TROPHIES, RETAKE_HOURS, PRACTICE_XP_PER_DAY, isPractice, practiceXpToday,
   beltIndex, trackXp, totalXp, beltOf, tracks, overallBelt, nextBelt, unlocked, categoriesFor,
   streak, streakBonus, award, grant, hasTrophy, checkTrophies, examStatus, finishExam, lastExam,
 };

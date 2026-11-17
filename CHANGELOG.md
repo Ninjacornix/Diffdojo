@@ -11,6 +11,7 @@
 - **Settings** screen: the model that writes your questions (Haiku 5.5 / Sonnet 5.5 / Opus 5.5), its effort (low / medium / high, passed as `--effort`), and whether Claude writes questions at all. New setting `model.effort` (default `low`).
 
 ### Changed
+- **No unlimited score.** XP is paid once per question content, so questions re-created by battles, Bug Hunter, Prepare or `generate` can't be farmed (review re-pays half once). Practice XP (packs, battles, Bug Hunter, prepared topics) is capped at 300 a day, and the fight says when the cap is reached; a capped question can still pay another day. Questions about Claude's real changes aren't capped.
 - **The battle menu is organised into screens**: Fight, Special fights, Prepare, Scores, Achievements, Settings, with a tab bar showing where you are and Back on each.
 
 ### Fixed

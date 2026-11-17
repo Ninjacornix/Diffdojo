@@ -793,7 +793,7 @@ export function registerBattle(on: On) {
       if (res.intercept) lines.push(`${res.enemyName} intercepted Claude's edit${res.file ? ` to ${res.file}` : ''}!`)
       if (res.intercept && res.correct) lines.push(`Correct! The edit goes through. Edits passed: ${res.passed ?? 0}.${res.xp ? ` +${res.xp} XP` : ''}`)
       else if (res.intercept) lines.push(`Wrong! ${res.enemyName} rejects the edit and stops Claude. You lose.${res.correctKey ? ` (Claude wrote: ${res.correctKey})` : ''}`)
-      else if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage} tokens!${res.xp ? ` +${res.xp} XP` : ''}`)
+      else if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage} tokens!${res.xp ? ` +${res.xp} XP` : res.xpCapped ? ' (daily practice XP limit reached: XP again tomorrow)' : ''}`)
       else if (res.enemyMissed) lines.push(`Wrong, it was ${res.correctKey}... but ${res.enemyName} missed!`)
       else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits ${res.playerName || 'You'} for ${res.enemyDamage} tokens!`)
       if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} ran out of tokens! ${res.playerName || 'You'}'s tokens are restored.`)

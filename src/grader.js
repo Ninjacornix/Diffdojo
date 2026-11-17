@@ -118,6 +118,19 @@ function gradeKillTest(q, testPath, root, cfg) {
 const MODE_FACTOR = { normal: 1, exam: 1, review: 0.5, boss: 1, audit: 1 };
 
 /**
+ * What makes two questions "the same" for XP: a pack question by its pack id;
+ * anything else by where it came from and what it asks (prompt, code, answer),
+ * so a re-created battle, Bug Hunter or prepared question pays only once.
+ */
+function contentKey(q) {
+  const meta = q.meta || {};
+  const basis = q.source && q.source.startsWith('pack:')
+    ? q.source
+    : [q.type, q.source || '', meta.op || '', meta.line || '', q.prompt, q.code || '', JSON.stringify(q.answer)].join('\u0000');
+  return require('crypto').createHash('sha256').update(basis).digest('hex').slice(0, 32);
+}
+
+/**
  * Grade and record an answer.
  * @returns {Promise<{correct, xp, explanation, evidence, detail, feedback, trophies, examResult}>}
  */
@@ -135,13 +148,25 @@ async function answer(db, q, response, { mode = 'normal', root, cfg, timeMs } = 
     db.run('INSERT INTO notes(question_id, repo_id, body, created_at) VALUES (?,?,?,?)', q.id, q.repo_id, String(response || ''), nowIso());
   }
 
-  // XP: only once per question for a correct answer (review mode re-awards at half).
+  // XP: once per question *content* for a correct answer, however often the
+  // question is re-created (review mode re-awards half, once); practice XP is
+  // capped per day (rewards.PRACTICE_XP_PER_DAY).
   let xp = 0;
+  let xpCapped = false;
   const already = db.get('SELECT 1 AS x FROM answers WHERE question_id = ? AND correct = 1', q.id);
   if (res.correct === true && (!already || mode === 'review')) {
-    let base = q.xp * (MODE_FACTOR[mode] || 1);
-    if (q.type === 'boss' && mode !== 'exam') base = 100;
-    xp = rewards.award(db, { track: q.track, base: Math.round(base), reason: `${q.type} (${q.difficulty})`, questionId: q.id, repoId: q.repo_id });
+    const key = (mode === 'review' ? 'review:' : '') + contentKey(q);
+    const claimed = db.run('INSERT OR IGNORE INTO xp_keys(key, question_id, awarded_at) VALUES (?,?,?)', key, q.id, nowIso()).changes > 0;
+    if (claimed) {
+      let base = q.xp * (MODE_FACTOR[mode] || 1);
+      if (q.type === 'boss' && mode !== 'exam') base = 100;
+      const max = rewards.isPractice(q) ? rewards.PRACTICE_XP_PER_DAY - rewards.practiceXpToday(db) : Infinity;
+      xp = rewards.award(db, { track: q.track, base: Math.round(base), reason: `${q.type} (${q.difficulty})`, questionId: q.id, repoId: q.repo_id, max });
+      if (!xp && max <= 0) {
+        xpCapped = true;
+        db.run('DELETE FROM xp_keys WHERE key = ?', key); // not used up: it can still pay tomorrow
+      }
+    }
   }
   const fb = q.format === 'lines' ? JSON.stringify({ wrong: res.wrong, found: res.found }) : feedback;
   db.run(
@@ -157,6 +182,7 @@ async function answer(db, q, response, { mode = 'normal', root, cfg, timeMs } = 
   return {
     correct: res.correct,
     xp,
+    xpCapped,
     detail: res.detail || null,
     wrong: res.wrong,
     explanation: q.explanation,

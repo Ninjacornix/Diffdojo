@@ -275,7 +275,7 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   const k = String(key).trim().toLowerCase();
   if (!p.map[k]) return { error: 'answer with a, b, c or d' };
   const graded = await require('./grader').answer(db, q, p.map[k], { mode: 'battle', cfg, root });
-  const ev = exchange(db, s, graded.correct === true, q.difficulty, rnd, { correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, trophies: graded.trophies || [] });
+  const ev = exchange(db, s, graded.correct === true, q.difficulty, rnd, { correctKey: p.correctKey, picked: k, xp: graded.xp, xpCapped: !!graded.xpCapped, explanation: q.explanation, trophies: graded.trophies || [] });
   s.pending = null;
   save(s);
   return { ...ev, state: view(s) };

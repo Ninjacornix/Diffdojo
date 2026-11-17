@@ -91,6 +91,8 @@ export type BattleResult = {
   trophies: { id: string; name: string }[]
   /** No Mercy: this exchange was SKYNET intercepting one of Claude's edits. */
   intercept?: boolean
+  /** No XP because today's practice XP limit is reached. */
+  xpCapped?: boolean
   file?: string | null
   defeat?: boolean
   passed?: number
