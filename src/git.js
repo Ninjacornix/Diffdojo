@@ -10,7 +10,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { run, shadowGitDir } = require('./util');
+const { run, shadowGitDir, repoDir, repoId } = require('./util');
 
 // Never snapshotted in a shadow-tracked folder (a real repo's .gitignore decides there).
 const SHADOW_EXCLUDE = [
@@ -55,10 +55,33 @@ function ensureShadow(root, gd) {
   return true;
 }
 
-/** The environment that points git at a folder's shadow repository, or {} for a real repo. */
+// Real repositories: objects DiffDojo writes (snapshots of the working tree)
+// go to a private store in ~/.diffdojo/<id>/objects, which reads the repo's
+// own objects through an alternate. Nothing is ever written into .git.
+const objectsCache = new Map();
+
+/** The repository's own object directory (shared by worktrees), asked of git without DiffDojo's environment. */
+function repoObjects(root) {
+  if (objectsCache.has(root)) return objectsCache.get(root);
+  const r = run('git', ['rev-parse', '--git-common-dir'], { cwd: root, timeout: 30000 });
+  const common = r.code === 0 && r.stdout.trim() ? path.resolve(root, r.stdout.trim()) : path.join(root, '.git');
+  const dir = path.join(common, 'objects');
+  objectsCache.set(root, dir);
+  return dir;
+}
+
+/**
+ * The environment git runs with: a folder's shadow repository, or for a real
+ * repository a private object store that reads the repo's objects but never
+ * writes there.
+ */
 function repoEnv(root) {
   const gd = shadowGitDir(root);
-  if (!gd) return {};
+  if (!gd) {
+    const store = path.join(repoDir(repoId(root)), 'objects');
+    fs.mkdirSync(store, { recursive: true });
+    return { GIT_OBJECT_DIRECTORY: store, GIT_ALTERNATE_OBJECT_DIRECTORIES: repoObjects(root) };
+  }
   if (!ensureShadow(root, gd)) return { GIT_DIR: path.join(gd, 'too-large'), GIT_WORK_TREE: root };
   return { GIT_DIR: gd, GIT_WORK_TREE: root };
 }
@@ -82,6 +105,24 @@ function gitDir(root) {
   return r.code === 0 ? r.stdout.trim() : path.join(root, '.git');
 }
 
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+/** Tracked or untracked (not ignored) files bigger than MAX_FILE_BYTES. */
+function largeFiles(root) {
+  const r = git(root, ['ls-files', '-co', '--exclude-standard', '-z']);
+  if (r.code !== 0) return [];
+  const out = [];
+  for (const f of r.stdout.split('\0')) {
+    if (!f) continue;
+    try {
+      if (fs.statSync(path.join(root, f)).size > MAX_FILE_BYTES) out.push(f);
+    } catch {
+      /* deleted */
+    }
+  }
+  return out;
+}
+
 /** Write the current working tree to a git tree object. Returns tree hash or null. */
 function snapshot(root) {
   const tmp = path.join(os.tmpdir(), `diffdojo-index-${process.pid}-${Date.now()}`);
@@ -97,7 +138,10 @@ function snapshot(root) {
       fs.utimesSync(tmp, st.atime, st.mtime);
     }
     const env = { GIT_INDEX_FILE: tmp };
-    const add = git(root, ['add', '-A', '--', '.'], { env, timeout: 120000 });
+    // Very large files (datasets, models, binaries) are left out: questions are
+    // about code, and hashing them every turn would be slow and fill the store.
+    const big = largeFiles(root).slice(0, 300).map((f) => `:(exclude,literal)${f}`);
+    const add = git(root, ['add', '-A', '--', '.', ...big], { env, timeout: 120000 });
     if (add.code !== 0) return null;
     const w = git(root, ['write-tree'], { env });
     return w.code === 0 ? w.stdout.trim() : null;
@@ -202,4 +246,4 @@ function parseDiff(text) {
   return files.filter((f) => f.file);
 }
 
-module.exports = { repoEnv, git, toplevel, head, snapshot, baseTree, emptyTree, diff, changedFiles, showFile, listFiles, parseDiff };
+module.exports = { repoEnv, largeFiles, MAX_FILE_BYTES, git, toplevel, head, snapshot, baseTree, emptyTree, diff, changedFiles, showFile, listFiles, parseDiff };

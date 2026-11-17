@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1
+
+Fixes from a release review.
+
+### Fixed
+- **A No Mercy fight could keep blocking edits later and elsewhere.** It only ended on a win, a loss, RUN or `/nomercy off`, so quitting Claude Code mid-fight (or a prompt with no edits) left it on, and it gated edits in every project and every later session. Now a fight belongs to the Claude Code session and project that started it, ends when the session ends, and expires after 3 hours; a leftover fight ends the next time the battle is opened.
+- **Snapshots wrote into the repository's `.git`.** Taking a snapshot of the working tree stored every untracked file as a git object in the repo's own object store, so repos with large uncommitted files (datasets, models) grew on every turn. Snapshots now go to a private object store in `~/.diffdojo/<id>/objects` that reads the repository's objects but never writes there, and files over 5 MB are left out.
+- **Node versions 22.5 to 22.17 silently did nothing.** DiffDojo needs Node 22.18 (`node:sqlite` without a flag, and running the battle's TypeScript scene file). The requirement is now 22.18; `diffdojo` and Claude Code say so plainly on an older Node, `diffdojo doctor` checks it, and CI tests 22.18.0.
+- The test command's temporary project copy no longer links `build/`, `target/` or `_deps/` back to the real project, so a test run can't write into your real build output.
+- `diffdojo doctor` timed only Node starting up, not the edit hook's work.
+
+### Changed
+- **The background `claude -p` call is isolated**: it runs from an empty temp folder (no project CLAUDE.md or project settings), with no MCP servers, no slash commands and user settings only, and it isn't saved for `/resume`. A Claude Code too old for one of these flags gets the call without it.
+- On Windows, arguments with characters `cmd.exe` treats specially are refused instead of passed to a `.cmd` launcher.
+- The README and the privacy doc say what actually leaves your machine (code excerpts to Claude by default; a public gist when you share), that the battle opens on every prompt by default (`/battle off` for the quiet box), and what each sandbox really blocks.
+- The plugin has an icon.
+
 ## 0.3.0
 
 ### Added

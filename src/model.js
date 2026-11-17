@@ -157,22 +157,41 @@ async function callApi(cfg, prompt, schema) {
  * only start through cmd.exe; the prompt goes over stdin, so the command line
  * holds only fixed flags.
  */
+/**
+ * Run `claude -p` as a bare question-writer, not a session in the user's
+ * project: from an empty temp folder (no project CLAUDE.md or settings), not
+ * saved for /resume, no MCP servers, no slash commands, user settings only.
+ */
 function claudeRun(args, input) {
-  return require('./util').runTool('claude', args, { input, timeout: 90000 });
+  const os = require('os');
+  const fs = require('fs');
+  const cwd = fs.mkdtempSync(require('path').join(os.tmpdir(), 'diffdojo-claude-'));
+  try {
+    return require('./util').runTool('claude', args, { input, timeout: 90000, cwd });
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
 }
+
+// Flags that keep the call isolated; an older CLI that lacks one gets the call without it.
+const ISOLATION = ['--no-session-persistence', '--strict-mcp-config', '--disable-slash-commands', ['--setting-sources', 'user']];
+// Flags that take a value.
+const VALUED = new Set(['--tools', '--model', '--effort', '--setting-sources', '--output-format', '--max-turns']);
 
 function callCli(cfg, prompt, schema) {
   const full = `${SYSTEM}\n\nJSON schema for your reply:\n${JSON.stringify(schema)}\n\n${prompt}`;
   let args = ['-p', '--output-format', 'json', '--max-turns', '1', '--tools', ''];
+  for (const f of ISOLATION) args.push(...(Array.isArray(f) ? f : [f]));
   if (cfg.model.model) args.push('--model', cfg.model.model);
   if (cfg.model.effort) args.push('--effort', cfg.model.effort);
   let r = claudeRun(args, full);
-  // Older CLIs don't know some flags: drop the one they name and retry.
-  for (const flag of ['--effort', '--tools']) {
-    if (r.code !== 0 && r.stderr.includes(flag.slice(2))) {
-      args = args.filter((a, i) => !(a === flag || args[i - 1] === flag));
-      r = claudeRun(args, full);
-    }
+  // Older CLIs reject flags they don't know: drop the one they name and retry.
+  for (let tries = 0; tries < 6 && r.code !== 0; tries++) {
+    const named = (r.stderr.match(/(?:unknown|unrecognized)[^\n]*?(--[a-z-]+)/i) || [])[1] || ['--effort', '--tools', '--setting-sources', '--disable-slash-commands', '--strict-mcp-config', '--no-session-persistence'].find((f) => args.includes(f) && r.stderr.includes(f.slice(2)));
+    if (!named || !args.includes(named)) break;
+    const i = args.indexOf(named);
+    args = args.filter((_, k) => k !== i && !(VALUED.has(named) && k === i + 1));
+    r = claudeRun(args, full);
   }
   if (r.code !== 0) throw new Error(`claude -p failed: ${r.stderr.slice(0, 300)}`);
   const env = extractJson(r.stdout);

@@ -156,17 +156,22 @@ function run(cmd, args, opts = {}) {
  * line is then built by hand and passed verbatim, so the quoted path survives.
  * Input goes over stdin; the arguments are fixed flags.
  */
-function runTool(name, args, { input, timeout = 60000, env } = {}) {
+function runTool(name, args, { input, timeout = 60000, env, cwd } = {}) {
   const bin = which(name) || name;
   if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
-    const line = [`"${bin}"`, ...args.map((a) => (a === '' ? '""' : /^[\w.:=\/-]+$/.test(a) ? a : `"${a}"`))].join(' ');
+    // cmd.exe gives " % ^ & | < > ! special meaning even inside quotes: refuse such
+    // arguments rather than try to escape them (DiffDojo's own are fixed flags,
+    // model names and ids, so a real one never has them).
+    const bad = args.find((a) => /["%^&|<>!\r\n]/.test(a));
+    if (bad !== undefined) return { code: -1, stdout: '', stderr: `refusing to pass ${JSON.stringify(bad)} through cmd.exe` };
+    const line = [`"${bin}"`, ...args.map((a) => (a === '' ? '""' : /^[\w.:=\/@+-]+$/.test(a) ? a : `"${a}"`))].join(' ');
     const r = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], {
-      input, encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: true,
+      cwd, input, encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: true,
       env: { ...process.env, DIFFDOJO_CHILD: '1', ...(env || {}) }, maxBuffer: 32 * 1024 * 1024,
     });
     return { code: r.status === null ? -1 : r.status, stdout: r.stdout || '', stderr: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
   }
-  return run(bin, args, { input, timeout, env });
+  return run(bin, args, { input, timeout, env, cwd });
 }
 
 /** Run a user-configured shell command (only ever the configured test/lint command). */
