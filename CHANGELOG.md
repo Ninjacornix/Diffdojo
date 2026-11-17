@@ -11,6 +11,7 @@
 - `npm run test:ui` for the in-app UI tests.
 
 - **RUN** in every fight (in Claude Code and `diffdojo battle`): ends the battle and goes back to the menu.
+- **Health is a token budget**: the bars are TOKENS bars, damage is in tokens, and each hit spills token-like words (`▁def`, `await`, `##ing`, `</s>`...) out of the bar of whoever was hit.
 - SKYNET has its own sprite on No Mercy's screen in the battle menu.
 
 ### Fixed

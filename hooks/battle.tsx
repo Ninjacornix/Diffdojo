@@ -355,7 +355,8 @@ export function registerBattle(on: On) {
     const enemyHp = res ? (a?.kind === 'enemyHit' ? lerp(res.enemyHpBefore, res.enemyHpAfter) : res.enemyHpAfter) : enemy.hp
     const playerHp = res ? (a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter) : res.playerHpAfter) : s.player.hp
     const sliding = i >= 0
-    const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp })
+    const lost = res ? (a?.kind === 'enemyHit' ? res.enemyHpBefore - res.enemyHpAfter : res.playerHpBefore - res.playerHpAfter) : 0
+    const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp, lost })
 
     let rows: BoxRow[] = []
     let control: unknown = null
@@ -364,12 +365,12 @@ export function registerBattle(on: On) {
       control = <Select key="intro" autoFocus options={[{ value: 'go', label: i >= INTRO_STEPS ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => endIntro($)} />
     } else if (res) {
       const lines: string[] = []
-      if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage}!${res.xp ? ` +${res.xp} XP` : ''}`)
+      if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage} tokens!${res.xp ? ` +${res.xp} XP` : ''}`)
       else if (res.enemyMissed) lines.push(`Wrong, it was ${res.correctKey}... but ${res.enemyName} missed!`)
-      else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits ${res.playerName || 'You'} for ${res.enemyDamage}!`)
-      if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} fainted! ${res.playerName || 'You'}'s HP is restored.`)
+      else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits ${res.playerName || 'You'} for ${res.enemyDamage} tokens!`)
+      if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} ran out of tokens! ${res.playerName || 'You'}'s tokens are restored.`)
       if (res.victory) lines.push(`${res.enemyName} is defeated! You cleared the ladder!`)
-      if (res.lifeLost && !res.gameOver) lines.push(`${res.playerName || 'You'} fainted! One life lost, HP restored.`)
+      if (res.lifeLost && !res.gameOver) lines.push(`${res.playerName || 'You'} ran out of tokens! One life lost, tokens restored.`)
       if (res.gameOver) lines.push('No lives left...')
       rows = lines.map(text => ({ text }))
       if (res.explanation) for (const x of wrap([res.explanation], W - 6).slice(0, 3)) rows.push({ text: x, dim: true })

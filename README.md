@@ -36,9 +36,9 @@ DiffDojo's own questions are checked against real evidence: running the code, re
 While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors. The screenshot at the top is a real frame: Evil Claude, the final boss of Professional mode, asks about a line in the change Claude just made.
 
 - **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses). Pick **RUN** under the answers to end the battle and go back to the menu.
-- Beat an enemy and your HP is fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
+- **Health is a token budget.** Every hit burns tokens, and you see them fall out of the bar: `▁def`, `await`, `##ing`, `</s>`... Beat an enemy and your tokens are fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
 - **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst) and **Endless** (waves get stronger; your best wave is recorded).
-- **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, HP bars drain, and the text box arrow blinks.
+- **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, token bars drain while tokens spill out, and the text box arrow blinks.
 - **Questions about Claude's code** are generated in the background while it works (from each edit, and again when the turn ends), and they show up in the fight: Professional mode asks them first.
 - Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
 - You fight under your own name: your git user name, or your system username. Pick another with `diffdojo config set playerName "Alex" --global`.

@@ -259,7 +259,13 @@ test('questions are generated while Claude works: an edit starts background gene
   const until = Date.now() + 120000;
   const count = () => db.get("SELECT COUNT(*) AS n FROM questions WHERE repo_id = ? AND family != 'questionnaire'", id).n;
   while (count() === 0 && Date.now() < until) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
-  assert.ok(count() > 0, 'code/design questions exist before the turn ends');
+  if (count() === 0) {
+    // Say why: the worker's error log, jobs it left behind and what it recorded.
+    const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').slice(-3000) : '(none)');
+    const logs = fs.existsSync(path.join(home, 'logs')) ? fs.readdirSync(path.join(home, 'logs')).map((f) => read(path.join(home, 'logs', f))).join('\n') : '(no logs)';
+    const pending = fs.existsSync(path.join(home, id, 'pending')) ? fs.readdirSync(path.join(home, id, 'pending')) : [];
+    assert.fail(`no code/design questions before the turn ends.\nlogs: ${logs}\npending: ${JSON.stringify(pending)}\nlast-stop: ${read(path.join(home, id, 'last-stop.json'))}\nfiles: ${JSON.stringify(fs.existsSync(path.join(home, id)) ? fs.readdirSync(path.join(home, id)) : [])}`);
+  }
   // A second edit right away does not start another run (throttled).
   const before = fs.readdirSync(path.join(home, id, 'pending')).length;
   runHook('on-edit.js', { session_id: 'MID', cwd: r2, tool_name: 'Edit', tool_input: { file_path: path.join(r2, 'sched.py') } }, { DIFFDOJO_NO_MIDTURN: '0' });
