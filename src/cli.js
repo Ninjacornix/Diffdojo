@@ -362,20 +362,24 @@ const commands = {
     const { root, repoId } = repoContext();
     const enabled = !!(repoId && util.isEnabled(repoId));
     const sub = pos[1] || 'status';
-    if (!root) return out({ enabled: false, queued: 0, question: null });
+    // Battles also run outside git repositories (concept questions only), unless
+    // DiffDojo was switched off for this repo or globally (autoEnable: false).
+    const battleAllowed = root ? enabled : util.autoEnable();
+    if (!root && !sub.startsWith('battle') && sub !== 'status') return out({ enabled: false, battleAllowed, queued: 0, question: null });
     const d = db();
     const queue = require('./queue');
     const server = require('./server');
     const stats = require('./stats');
     const status = () => {
+      if (!root) return { enabled: false, battleAllowed, queued: 0, lastStop: null, header: stats.header(d, {}) };
       const last = util.readJson(path.join(util.repoDir(repoId), 'last-stop.json'), null);
-      return { enabled, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
+      return { enabled, battleAllowed, queued: queue.queuedCount(d, repoId), lastStop: last && last.at, header: stats.header(d, {}) };
     };
     if (sub === 'status') return out({ ...status(), battle: config.load(repoId).battle });
     if (sub.startsWith('battle')) {
       const battle = require('./battle');
       try {
-        if (sub === 'battle-state') return out({ ...status(), state: battle.view() });
+        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, state: battle.view() });
         if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2])) });
         if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
         if (sub === 'battle-resume') return out({ state: battle.view(battle.resume()) });
@@ -432,6 +436,9 @@ const commands = {
     const r = require('./runner');
     ok(!!r.pythonBin(), `python (predict-output / pack snippets): ${r.pythonBin() || 'not found'}`);
     ok(!!r.cxxBin('cpp'), `C++ compiler: ${r.cxxBin('cpp') || 'not found'}`);
+    const sb = r.sandboxKind();
+    const SB = { bwrap: 'bubblewrap (no network, read-only system, home hidden)', unshare: 'unshare (no network only; install bubblewrap for file isolation)', 'sandbox-exec': 'sandbox-exec (no network, no writes outside a temp folder)' };
+    ok(sb === 'bwrap' || sb === 'sandbox-exec', `sandbox for Claude's code: ${SB[sb] || `none (runs with a timeout and minimal environment; set snippetSandbox to "require" to skip those questions)`}`);
     ok(!!util.which('claude'), 'claude CLI (only needed for the optional model path)');
     const { repoId, root } = repoContext();
     if (root) {

@@ -34,7 +34,16 @@ If the model path uses `claude -p`, the excerpts sent are handled like any other
 Validation runs code, so:
 - Snippets and mutants run in a temporary directory, never in the working tree.
 - Only the user-configured test command is executed against the project. DiffDojo never invents build or shell commands.
-- Snippet execution has a timeout (default 5 s) and, where available, runs with no network (for example `unshare -n` on Linux or a container).
+- Code taken from Claude's change (predict-the-output questions) runs in the strongest sandbox the machine has, always with a timeout (default 5 s) and a minimal environment with no API keys, tokens or cloud credentials:
+
+  | Platform | Sandbox | What it blocks |
+  |---|---|---|
+  | Linux with bubblewrap (`bwrap`) | `bwrap` | network; writes anywhere but the snippet's temp folder; the home folder is hidden |
+  | Linux without bubblewrap | `unshare -rn` | network only |
+  | macOS | `sandbox-exec` | network; writes outside the snippet's temp folder |
+  | Windows | none | only the timeout and the minimal environment apply |
+
+  `diffdojo doctor` shows which one is in use. Set `diffdojo config set snippetSandbox require --global` to skip those questions on a machine with no sandbox instead of running the code unsandboxed.
 - Repository text is treated as data. Instructions in comments or files are never followed by the generator. Model prompts wrap code in clear delimiters and ask only for questions in a fixed JSON schema, which is then validated.
 
 ## Threats
@@ -43,7 +52,7 @@ Validation runs code, so:
 |---|---|
 | Secrets copied into the database | Deny globs, secret scan, excerpt size cap |
 | Prompt injection via repo content | Fixed output schema, schema validation, no tool access for the generator |
-| Malicious code executed during validation | Temp dir, timeouts, no network where possible, only user-configured test command |
+| Malicious code executed during validation | Temp dir, timeouts, minimal environment, OS sandbox where available (`snippetSandbox: require` to insist on one), only user-configured test command |
 | Slowing or breaking Claude Code | Async hooks, early exit, never exit code 2, errors swallowed and logged |
 | Hook recursion from `claude -p` | `DIFFDOJO_CHILD=1` guard in every hook |
 | Malicious plugin update | Pinned dependencies, tagged signed releases, readable source |

@@ -9,7 +9,7 @@ All phases can be completed by one developer with no outside approval.
 - [x] Confirm `async: true` hooks don't delay Claude's turn (time a session with and without the plugin).
 - [x] Inspect the transcript file format at `transcript_path` and confirm Claude's per-turn explanation text can be extracted reliably.
 - [x] Confirm `claude -p` works from inside a hook with the `DIFFDOJO_CHILD` guard and causes no recursion.
-- [ ] Test on Linux and macOS. (Tested on Windows.)
+- [x] Test on Linux and macOS. (CI runs on Linux, macOS and Windows.)
 
 **Exit:** hooks record edits for an enabled repo with no visible effect on Claude Code.
 
@@ -50,7 +50,8 @@ All phases can be completed by one developer with no outside approval.
 - [x] Review mode (revisit missed questions).
 - [ ] Docs, demo GIF, example repo.
 - [ ] Publish on GitHub and a public plugin marketplace listing.
-- [ ] Optional sandboxing improvements (container runner).
+- [x] Sandboxing improvements: bubblewrap on Linux, sandbox-exec on macOS, minimal environment everywhere, `snippetSandbox: require`.
+- [ ] Optional container runner (for Windows).
 
 ## Initial backlog
 

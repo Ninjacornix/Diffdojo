@@ -93,6 +93,7 @@ declare module 'claude-code' {
   interface PluginState {
     diffdojo: {
       battleOn: boolean
+      battleAllowed: boolean
       battleScene: Shaped<BattleView | null>
       battleAfter: Shaped<BattleView | null>
       battleQuestion: Shaped<BattleQuestion | null>

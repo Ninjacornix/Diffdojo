@@ -94,10 +94,25 @@ function log(scope, err) {
 }
 
 /** Run a command without a shell. Returns {code, stdout, stderr, timedOut}. */
+// What a snippet keeps of the environment: enough to find compilers, runtimes
+// and temp space on every platform, and nothing that usually holds a secret.
+const SAFE_ENV = new Set(['PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ']);
+
+function cleanEnv() {
+  // Keys are matched without case (Windows spells it Path) and kept as spelled.
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (SAFE_ENV.has(k.toUpperCase())) env[k] = v;
+  return env;
+}
+
+/**
+ * Run a program. `opts.cleanEnv` starts from a minimal environment (no API
+ * keys, tokens or cloud credentials) instead of this process's own.
+ */
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
-    env: { ...process.env, DIFFDOJO_CHILD: '1', ...(opts.env || {}) },
+    env: { ...(opts.cleanEnv ? cleanEnv() : process.env), DIFFDOJO_CHILD: '1', ...(opts.env || {}) },
     input: opts.input,
     encoding: 'utf8',
     timeout: opts.timeout || 30000,
@@ -207,7 +222,7 @@ function dayKey(d = new Date()) {
 }
 
 module.exports = {
-  home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled, autoEnable,
+  cleanEnv, home, normPath, repoId, repoDir, ensureDir, findRepoRoot, isEnabled, autoEnable,
   readJson, writeJson, log, run, runShell, which, readStdin, nowIso, slug,
   shuffle, pick, rng, dayKey,
 };

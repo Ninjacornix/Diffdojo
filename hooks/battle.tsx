@@ -15,6 +15,9 @@ type Engine = EngineInterface
 export const BATTLE_PANE = 'dojo-battle'
 
 const battleOn = atom({ plugin: 'diffdojo', key: 'battleOn' } as const, true)
+// False only when DiffDojo is switched off here (/diffdojo:stop or autoEnable: false).
+// Battles also run outside git repositories, on concept questions.
+const battleAllowed = atom({ plugin: 'diffdojo', key: 'battleAllowed' } as const, true)
 const scene = atom({ plugin: 'diffdojo', key: 'battleScene' } as const, null, { shape: 'scene-2' })
 const after = atom({ plugin: 'diffdojo', key: 'battleAfter' } as const, null, { shape: 'scene-2' })
 const question = atom({ plugin: 'diffdojo', key: 'battleQuestion' } as const, null, { shape: 'bq-1' })
@@ -78,13 +81,18 @@ async function loadQuestion($: Engine) {
 async function sync($: Engine) {
   const r = await cli($, ['battle-state'])
   if (r.battle !== undefined) await update($, battleOn, () => r.battle !== false)
+  if (r.battleAllowed !== undefined) await update($, battleAllowed, () => r.battleAllowed !== false)
   if (!r.state) return
   await update($, scene, () => r.state as BattleView)
   if (r.state.phase === 'fight' && !(await read($, question)) && !(await read($, outcome)) && (await read($, intro)) < 0) await startIntro($)
 }
 
+/**
+ * Open the battle pane. The open comes first, before any CLI call, so Claude
+ * Code still counts it as answering the person's command or prompt: an open it
+ * sees as unasked waits undrawn on terminals narrower than 144 columns.
+ */
 export async function openBattle($: Engine, focus: boolean) {
-  await sync($)
   const opened = await $.ui.open({
     id: BATTLE_PANE,
     title: 'DiffDojo Battle',
@@ -95,12 +103,21 @@ export async function openBattle($: Engine, focus: boolean) {
   if (opened.isPlaced) {
     idleTimer?.cancel()
     idleTimer = $.clock.every(IDLE_MS, () => update($, tick, n => (n + 1) % 1000))
+  } else {
+    $.ui.log(`diffdojo battle: pane not placed: ${opened.reason}`, { to: 'debug' })
   }
+  await sync($)
+  return opened
+}
+
+/** Whether prompts should start a fight: battle mode on and DiffDojo not switched off here. */
+export async function battleAutoStart($: Engine) {
+  return (await read($, battleOn)) && (await read($, battleAllowed))
 }
 
 async function choose($: Engine, mode: string) {
   const r = await cli($, ['battle-start', mode])
-  if (r.error) return $.ui.toast(`DiffDojo: ${r.error}`)
+  if (r.error || !r.state) return $.ui.toast(`DiffDojo: could not start the battle${r.error ? `: ${r.error}` : ''}`)
   await update($, outcome, () => null)
   await update($, question, () => null)
   await update($, scene, () => r.state as BattleView)
@@ -149,6 +166,7 @@ async function proceed($: Engine) {
 
 async function again($: Engine) {
   const r = await cli($, ['battle-resume'])
+  if (r.error || !r.state) return $.ui.toast(`DiffDojo: could not restart the battle${r.error ? `: ${r.error}` : ''}`)
   await update($, scene, () => r.state as BattleView)
   await update($, outcome, () => null)
   await startIntro($)
@@ -156,6 +174,7 @@ async function again($: Engine) {
 
 async function toMenu($: Engine) {
   const r = await cli($, ['battle-quit'])
+  if (r.error || !r.state) return $.ui.toast(`DiffDojo: ${r.error || 'could not return to the menu'}`)
   await update($, scene, () => r.state as BattleView)
   await update($, outcome, () => null)
   await update($, question, () => null)

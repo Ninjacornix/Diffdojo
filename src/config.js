@@ -37,6 +37,12 @@ const DEFAULTS = {
   testTimeoutSec: 120,
   lintCommand: null, // optional; otherwise a few known linters are tried on changed files
   snippetTimeoutSec: 5,
+  // Global only. How code from Claude's change is run for predict-the-output
+  // questions. 'auto': in the strongest sandbox this machine has (bubblewrap
+  // on Linux, sandbox-exec on macOS: no network, no writes outside a temp
+  // folder), else unsandboxed with a minimal environment (Windows).
+  // 'require': skip those questions when no sandbox is available.
+  snippetSandbox: 'auto',
   snoozeMinutes: 60,
   whyQuestions: true, // read Claude's stated reasoning from the local transcript
   pinnedTopics: [],

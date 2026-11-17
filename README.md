@@ -20,7 +20,7 @@ Everything runs on your machine. No accounts, no servers, nothing uploaded.
 - *What is this data structure?* What container did Claude use for this, and what is its complexity?
 
 **Concept quizzes** — on the topics you're working in
-- 250+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
+- 270+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
 
 **Review extras** (in the plain quiz, not in battles)
 - *Spot the bug:* a copy of one of Claude's functions with one line quietly broken, at most one per change.
@@ -40,6 +40,9 @@ While Claude works, questions turn into a retro turn-based fight above your prom
 - Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
 - You fight under your own name: your git user name, or your system username. Pick another with `diffdojo config set playerName "Alex" --global`.
 - In Claude Code: `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` switches back to the plain question box. Esc returns to your prompt.
+- Works in any folder, git or not. Outside a git repository there's no change to ask about, so the fight uses concept questions.
+
+**The fight didn't open when I sent a prompt?** Check that battle mode is on (`/battle on`) and DiffDojo isn't stopped in that project (`/diffdojo:start`). In a narrow terminal Claude Code may hold back panes a plugin opens by itself: type `/battle` to open it, or widen the window.
 
 ## Try it without prompting Claude
 
@@ -157,6 +160,7 @@ Run `diffdojo help` for everything else.
 - **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
 - **Never talks to Claude.** Nothing is ever injected into your conversation.
 - **Safe with your code.** Code only ever runs in a temporary copy, and the only project command DiffDojo will run is the test command you gave it. Files like `.env` and keys are skipped, and anything that looks like a secret is filtered out.
+- **Claude's code runs boxed in.** To check "what does this return?" answers, DiffDojo runs functions from Claude's change. On Linux (with bubblewrap) and macOS that happens in a sandbox with no network that can't write to your files; on Windows there's no sandbox, only a timeout and an environment stripped of API keys and tokens. Run `diffdojo config set snippetSandbox require --global` to skip those questions where no sandbox is available. Details in [Privacy & security](docs/PRIVACY_AND_SECURITY.md#execution-safety).
 - **You're in control.** `diffdojo export` gives you all your data as one file; `diffdojo purge --yes` deletes it.
 
 **Optional AI-written questions:** DiffDojo can use your own Claude plan to write extra questions (`diffdojo config set model.enabled true`). This is **off by default**. When on, small code excerpts are sent to Claude under your account's normal terms — keep it off for confidential code.
@@ -169,8 +173,12 @@ Contributions are very welcome — especially **new quiz questions**! Packs are 
 
 ```bash
 npm test          # run the test suite
+npm run test:ui   # the in-app UI tests (needs the claude CLI)
 npm run pack-ci   # validate all question packs (and run their code snippets)
+npm run lint      # syntax-check every source file
 ```
+
+CI runs all of these on Linux, macOS and Windows for every pull request.
 
 Want to know how it works under the hood? See the design docs:
 [Product requirements](docs/PRODUCT_REQUIREMENTS.md) ·
@@ -182,7 +190,7 @@ Want to know how it works under the hood? See the design docs:
 
 ## Status
 
-Version 0.1 — early, but working. Tested on Windows with Node 24; Linux and macOS should work but haven't been tested yet. Found a problem? Please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
+Version 0.2 — early, but working. CI tests every change on Linux, macOS and Windows with Node 22 and 24; see the [changelog](CHANGELOG.md). Found a problem? Please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
 
 ## License
 

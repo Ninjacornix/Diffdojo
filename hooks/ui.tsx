@@ -8,7 +8,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { DojoQuestion, DojoResult } from '../types'
-import { battleSessionStart, openBattle, registerBattle } from './battle'
+import { battleAutoStart, battleSessionStart, openBattle, registerBattle } from './battle'
 
 const PANE = 'diffdojo'
 const KEYS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -131,9 +131,13 @@ export const register: Register = on => {
   // Claude starts working: make sure there is something to answer, and watch
   // for new questions the background worker adds.
   on('prompt.submit', async ($, e, nextHook) => {
+    // A real prompt typed by the person starts a fight; slash commands (/battle,
+    // /dojo...) and hidden prompts answer for themselves. The pane is opened
+    // first, while this is plainly the person's prompt, so Claude Code places it
+    // at any terminal width.
+    if (!e.command && !e.isMeta && (await battleAutoStart($))) void openBattle($, true)
     const r = await nextHook(e)
     await update($, working, () => true)
-    if ((await read($, battleOn)) && (await read($, enabled))) void openBattle($, true)
     void (async () => {
       const s = await api($, ['fill'])
       if (!s.error) await apply($, s)

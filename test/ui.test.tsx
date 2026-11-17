@@ -1,6 +1,6 @@
 // Tests for the in-app UI (hooks/ui.tsx), run with `claude plugin test .`.
 // The DiffDojo CLI is faked under `$.process.run`, so these never touch disk.
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const QUESTION = {
   id: 7,
@@ -63,11 +63,21 @@ const BAND = (surface: 'terminal' | 'desktop', isWorking: boolean) =>
     props: { hasSurvey: false, isCollapsed: false, isWorking },
   }) as const
 
-async function boot($: any, on: any) {
+/** Starts a session; `toasts` collects what the plugin toasted. Settles the start's background sync. */
+async function boot($: any, on: any, toasts: string[] = []) {
+  const clock = mock.clock(on)
   on('command.register', () => ({ value: { command: 'dojo' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.toast', (_: unknown, e: any) => {
+    toasts.push(String(e.text ?? ''))
+    return { value: undefined }
+  })
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  return clock
 }
 
 test('while Claude works the band shows the question and grades a typed answer', async ($, on) => {
@@ -194,5 +204,68 @@ test('battle: a wrong answer shows the enemy striking back', async ($, on) => {
   await ui.select({ key: 'intro', value: 'go' }) // continue
   await ui.select({ key: 'q-11', value: 'a' })
   expect(await ui.find({ type: 'Text', text: /Wrong, it was b! TYPO SPRITE hits MILAN for 15/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---------------- battle outside a git repository ----------------
+
+/** The CLI as it answers in a folder with no git: no repo, but battles allowed. */
+function fakeNoGit(on: any, { startState = FIGHT as unknown } = {}) {
+  const calls: string[][] = []
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: false, battleAllowed: true, queued: 0, header: '' }
+    if (args[0] === 'battle-state') body = { ...body, battle: true, state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
+    if (args[0] === 'battle-start') body = startState ? { state: startState } : {}
+    if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  return calls
+}
+
+test('battle: a prompt opens the fight even outside a git repository', async ($, on) => {
+  fakeNoGit(on)
+  const opened: any[] = []
+  const clock = mock.clock(on)
+  on('command.register', () => ({ value: { command: 'dojo' } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.open', (_: unknown, e: any) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('prompt.submit', (_: unknown, e: any) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  await $.prompt.submit({ text: 'can you make simple a star bfs etc' })
+  await clock.settle()
+  expect(opened.some(o => o.id === 'dojo-battle')).toBe(true)
+  // A slash command does not open it a second time on its own.
+  opened.length = 0
+  await $.prompt.submit({ text: '/dojo', command: { name: 'dojo', args: '' } } as any)
+  await clock.settle()
+  expect(opened.some(o => o.id === 'dojo-battle')).toBe(false)
+})
+
+test('battle: a failed start stays on the menu with a toast instead of silently resetting', async ($, on) => {
+  fakeNoGit(on, { startState: null })
+  const toasts: string[] = []
+  await boot($, on, toasts)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'easy' })
+  expect(toasts.some(t => /could not start/.test(t))).toBe(true)
+  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('battle: picking a mode outside a git repository starts the fight', async ($, on) => {
+  const calls = fakeNoGit(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'endless' })
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'endless')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /TYPO SPRITE wants to fight!/ })).toBeTruthy()
   await ui.unmount()
 })

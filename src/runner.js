@@ -10,13 +10,75 @@ const path = require('path');
 const { run, runShell, which } = require('./util');
 const git = require('./git');
 
-let unshareOk = null;
-function sandboxPrefix() {
-  if (process.platform !== 'linux') return null;
-  if (unshareOk === null) {
-    unshareOk = !!which('unshare') && run('unshare', ['-rn', 'true'], { timeout: 3000 }).code === 0;
+// ---- sandboxing for code that comes from Claude's change ----
+//
+// bwrap (Linux): read-only view of the system, home hidden, no network, the
+//   snippet's temp folder the only writable place.
+// unshare -rn (Linux, no bwrap): no network only.
+// sandbox-exec (macOS): no network, no writes outside the temp folder.
+// none (Windows, or nothing available): a timeout and a minimal environment.
+
+let sandboxCache = null;
+
+function probe(cmd, args) {
+  return !!which(cmd) && run(cmd, [...args, 'true'], { timeout: 3000 }).code === 0;
+}
+
+/** The strongest sandbox this machine offers: 'bwrap' | 'unshare' | 'sandbox-exec' | 'none'. */
+function sandboxKind() {
+  if (sandboxCache) return sandboxCache;
+  if (process.env.DIFFDOJO_SANDBOX) return (sandboxCache = process.env.DIFFDOJO_SANDBOX); // tests and debugging
+  let kind = 'none';
+  if (process.platform === 'linux') {
+    if (probe('bwrap', ['--ro-bind', '/', '/', '--dev', '/dev', '--unshare-all', '--die-with-parent'])) kind = 'bwrap';
+    else if (probe('unshare', ['-rn'])) kind = 'unshare';
+  } else if (process.platform === 'darwin') {
+    if (probe('sandbox-exec', ['-p', '(version 1)(allow default)(deny network*)'])) kind = 'sandbox-exec';
   }
-  return unshareOk ? ['unshare', '-rn'] : null;
+  return (sandboxCache = kind);
+}
+
+function sandboxPolicy() {
+  try {
+    return require('./config').load().snippetSandbox || 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+function under(p, dir) {
+  const rel = path.relative(dir, p);
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/** The argv that runs `cmd args` inside the sandbox, with `dir` as the only writable folder. */
+function sandboxed(kind, dir, cmd, args) {
+  if (kind === 'bwrap') {
+    const argv = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp'];
+    // Hide the home folder (keys, tokens, dotfiles) unless the runtime itself lives there (pyenv, nvm...).
+    const home = os.homedir();
+    if (home && home !== '/' && !under(cmd, home) && !under(dir, home)) argv.push('--tmpfs', home);
+    argv.push('--bind', dir, dir, '--chdir', dir, '--unshare-all', '--die-with-parent', '--new-session', cmd, ...args);
+    return ['bwrap', argv];
+  }
+  if (kind === 'unshare') return ['unshare', ['-rn', cmd, ...args]];
+  if (kind === 'sandbox-exec') {
+    const real = fs.realpathSync(dir).replace(/["\\]/g, '');
+    const profile = `(version 1)(allow default)(deny network*)(deny file-write*)(allow file-write* (subpath "${real}") (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/tty") (regex #"^/dev/fd/"))`;
+    return ['sandbox-exec', ['-p', profile, cmd, ...args]];
+  }
+  return [cmd, args];
+}
+
+/**
+ * Run code that came from Claude's change: sandboxed where possible, always with
+ * a minimal environment. Returns null when policy 'require' finds no sandbox.
+ */
+function exec(cmd, args, opts) {
+  const kind = sandboxKind();
+  if (kind === 'none' && sandboxPolicy() === 'require') return null;
+  const [c, a] = sandboxed(kind, opts.cwd, cmd, args);
+  return run(c, a, { ...opts, cleanEnv: true });
 }
 
 function tempDir(prefix = 'diffdojo-') {
@@ -31,11 +93,7 @@ function rmrf(d) {
   }
 }
 
-function exec(cmd, args, opts) {
-  const pre = sandboxPrefix();
-  if (pre) return run(pre[0], [...pre.slice(1), cmd, ...args], opts);
-  return run(cmd, args, opts);
-}
+const NO_SANDBOX = { ok: false, stage: 'unsupported', stdout: '', stderr: 'no sandbox available (snippetSandbox: require)' };
 
 function pythonBin() {
   return which('python3') || which('python') || null;
@@ -59,12 +117,14 @@ function runSnippet(code, lang, { timeoutSec = 5, stdin } = {}) {
       if (!py) return { ok: false, stage: 'unsupported', stdout: '', stderr: 'python not found' };
       fs.writeFileSync(path.join(dir, 'snippet.py'), code);
       const r = exec(py, ['-I', '-B', 'snippet.py'], { cwd: dir, timeout, input: stdin, env: { PYTHONHASHSEED: '0' } });
+      if (!r) return NO_SANDBOX;
       return { ok: r.code === 0 && !r.timedOut, stage: 'run', stdout: r.stdout, stderr: r.stderr, timedOut: r.timedOut };
     }
     if (lang === 'javascript' || lang === 'typescript') {
       const file = lang === 'typescript' ? 'snippet.ts' : 'snippet.js';
       fs.writeFileSync(path.join(dir, file), code);
       const r = exec(process.execPath, ['--no-warnings', file], { cwd: dir, timeout, input: stdin });
+      if (!r) return NO_SANDBOX;
       return { ok: r.code === 0 && !r.timedOut, stage: 'run', stdout: r.stdout, stderr: r.stderr, timedOut: r.timedOut };
     }
     if (lang === 'cpp' || lang === 'c') {
@@ -79,6 +139,7 @@ function runSnippet(code, lang, { timeoutSec = 5, stdin } = {}) {
       const c = run(cc, [...flags, '-O1', '-o', exe, src], { cwd: dir, timeout: 60000, env });
       if (c.code !== 0) return { ok: false, stage: 'compile', stdout: c.stdout, stderr: c.stderr };
       const r = exec(exe, [], { cwd: dir, timeout, input: stdin, env });
+      if (!r) return NO_SANDBOX;
       return { ok: r.code === 0 && !r.timedOut, stage: 'run', stdout: r.stdout, stderr: r.stderr, timedOut: r.timedOut };
     }
     return { ok: false, stage: 'unsupported', stdout: '', stderr: `cannot run ${lang}` };
@@ -198,4 +259,4 @@ function syntaxOk(content, lang) {
   return null; // unknown: not checked
 }
 
-module.exports = { runSnippet, runDeterministic, normalizeOutput, copyWorkspace, removeWorkspace, runTests, syntaxOk, tempDir, rmrf, pythonBin, cxxBin };
+module.exports = { sandboxKind, runSnippet, runDeterministic, normalizeOutput, copyWorkspace, removeWorkspace, runTests, syntaxOk, tempDir, rmrf, pythonBin, cxxBin };
