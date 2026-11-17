@@ -1,124 +1,156 @@
 # DiffDojo
 
-**Learn from the code Claude writes for you — while it writes it.**
+Learn from the code Claude writes for you, while it's writing it.
 
 <p align="center"><img src="docs/evil-claude-battle.svg" alt="DiffDojo Battle: fighting Evil Claude in the terminal by answering a question about the code Claude just wrote" width="677"></p>
 
-When Claude Code is busy working on your project, you're usually just waiting. DiffDojo turns that waiting time into practice: after each change Claude makes, it asks you a few short questions about *that exact change*. Answering them means you actually review and understand the code instead of skimming it.
+When Claude Code is working on your project, you mostly sit and wait. DiffDojo uses that time. Every time Claude changes your code, it asks you a few short questions about that change: what a line does, why that data structure, what a function returns for some input. Answer them and you actually read the code instead of skimming past it. Ignore them and nothing happens.
 
-> DiffDojo is an independent, open-source plugin for Claude Code. It is not affiliated with or endorsed by Anthropic.
+It's a plugin for Claude Code. It isn't made by or affiliated with Anthropic.
 
-No accounts, no servers. Your progress stays on your machine; the only thing that leaves it is short excerpts of Claude's changes, sent to Claude on your own plan so it can write questions about them (one setting turns that off).
+## Install
 
----
+You need [Node.js](https://nodejs.org) 22.5 or newer and git. Nothing else is required, and there's no `npm install` step. Python and a C++ compiler are optional; with them DiffDojo can run your Python and C++ functions to check "what does this return?" questions.
 
-## What kind of questions?
-
-**Claude's questions about your project** — the main course
-- After each change, Claude itself writes technical questions about **that change in your project**: why a heap and not a list here, what `due(5)` returns when two jobs tie, what happens to `recent` after 12 jobs. A cheap model (Claude Haiku) writes them in the background on your own plan, so your main conversation never sees them and Claude's work isn't slowed down. A second, blind call answers each one, and only questions both calls agree on are kept.
-
-**Technical questions DiffDojo builds itself** — checked by running or reading the code
-- *What is this?* Claude used `std::lock_guard`, `heapq.heappush`, `Promise.all` or `EPOLLET` in its change. What does it do, and why does it matter here?
-- *What does this return?* Predict the output of a function Claude wrote for a given input. (DiffDojo actually runs it to know the answer.)
-- *What is this data structure?* What container did Claude use for this, and what is its complexity?
-
-**Concept quizzes** — on the topics you're working in
-- 270+ hand-written questions on C++, concurrency, Linux networking, Python, JavaScript/TypeScript, and algorithms. Writing epoll code? You'll get epoll questions.
-
-**Review extras** (in the plain quiz, not in battles)
-- *Spot the bug:* a copy of one of Claude's functions with one line quietly broken, at most one per change.
-- *Write a test* that would catch a hidden bug, and *why did Claude do this?* checked against what Claude said in your session.
-
-DiffDojo's own questions are checked against real evidence: running the code, reading it, or reviewed answer keys. Claude's questions are double-checked by a blind second answer; they earn a bit less XP and never decide a belt exam.
-
-## Battle mode
-
-While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors. The screenshot at the top is a real frame: Evil Claude, the final boss of Professional mode, asks about a line in the change Claude just made.
-
-- **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses). Pick **RUN** under the answers to end the battle and go back to the menu.
-- **Health is a token budget.** Every hit burns tokens, and you see them fall out of the bar: `▁def`, `await`, `##ing`, `</s>`... Beat an enemy and your tokens are fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
-- **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst), **Endless** (waves get stronger; your best wave is recorded) and **No Mercy** (SKYNET, below).
-- **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, token bars drain while tokens spill out, and the text box arrow blinks.
-- **Questions about Claude's code** are generated in the background while it works (from each edit, and again when the turn ends), and they show up in the fight: Professional mode asks them first.
-- Battle answers count like any other: XP, belts, stats, plus a trophy for clearing each ladder.
-- You fight under your own name: your git user name, or your system username. Pick another with `diffdojo config set playerName "Alex" --global`.
-- In Claude Code: `/battle` opens it any time, `/battle menu` picks a new mode, `/battle off` switches back to the plain question box. Esc returns to your prompt.
-- Works in any folder, git or not.
-
-**The fight didn't open when I sent a prompt?** Check that battle mode is on (`/battle on`) and DiffDojo isn't stopped in that project (`/diffdojo:start`). In a narrow terminal Claude Code may hold back panes a plugin opens by itself: type `/battle` to open it, or widen the window.
-
-## The battle menu
-
-`/battle` opens the menu:
-
-- **Fight**: the battle ladders (Easy, Medium, Hard, Professional with Evil Claude, Endless).
-- **Special fights**: **No Mercy** (SKYNET, below) and **Bug Hunter**.
-- **Prepare**: pick a topic (or type your own, like "Rust lifetimes") and Claude writes questions on it before you fight; without Claude they come from the question packs. They come up in your next fights.
-- **Scores**: your score across all your projects: total XP, belt, streak, XP today, answers and accuracy, then a row per project (XP, answers, % right), with the project you're in marked. **Share my score** publishes it as a GitHub Gist (below).
-- **Achievements**: your belt, XP and streak, belts per topic, and every trophy, earned or not. Open a trophy to see its ASCII art (in colour once you've earned it).
-- **Settings**: which Claude model writes your questions (Haiku 5.5, the cheapest and the default; Sonnet 5.5; Opus 5.5), how much effort it puts in (low, medium, high), and whether Claude writes questions at all.
-
-After an enemy's intro the fight starts by itself; Enter skips the wait.
-
-## Bug Hunter: fight FREE CHINESE LLM
-
-FREE CHINESE LLM "optimises" a function Claude wrote and slips one bug into it. You see the broken function and pick the line that fixes it; the wrong choices include leaving the bug in. Right answers strike it, wrong ones let it strike back, like any fight. Only the question has the bug: your files are never touched. Bugs come from Claude's recent code in your project (or the demo project before Claude has written any), and for Python and JavaScript DiffDojo runs the function first to make sure the "bug" really changes what it returns.
-
-## No Mercy: fight SKYNET
-
-A battle mode for when you really want to keep up with Claude. **SKYNET** has no health bar, and neither do you. Its ability: **it intercepts every edit Claude makes for your prompt.** Before the change reaches the file, SKYNET asks you one question about that exact change, right in the battle pane beside the chat (it opens if it was closed; Claude Code's question dialog is used only if the pane can't be shown):
-
-- *Which line did Claude write here?* The new code with one line hidden, the real line among look-alikes (`<` vs `<=`, swapped names, off-by-one numbers).
-- *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.
-
-**Answer right** and the edit goes through (with XP). **Answer wrong, or close the question, and you lose on the spot:** the edit is rejected and Claude stops working, so you can look at what it was doing. **SKYNET falls when Claude finishes your prompt** with every edit answered, which earns the *Judgment Averted* trophy.
-
-Pick **No Mercy** in the battle menu (or type `/nomercy`). SKYNET's screen shows this warning first; choose **Fight SKYNET**, then send your prompt. **RUN** or `/nomercy off` ends the fight, and Claude edits freely again. Between edits SKYNET just watches: there are no other questions in this fight.
-
-Edits to non-code files (Markdown, JSON...) pass without a question. If something goes wrong building a question, the edit goes through rather than blocking your work.
-
-## Try it without prompting Claude
-
-```bash
-diffdojo demo      # makes ~/diffdojo-demo: a small project with a simulated Claude change, already turned into questions
-cd ~/diffdojo-demo
-diffdojo battle    # play the battle right in this terminal (no Claude Code needed)
-```
-
-Or open the demo in Claude Code (`claude --plugin-dir /path/to/Diffdojo`) and type `/battle` or `/dojo`. No need to ask Claude for anything first. `diffdojo battle` works in any project, too; `diffdojo battle --snapshot` prints a few frames instead of playing.
-
-## Earn your belts
-
-Correct answers earn XP. XP unlocks **belt exams** — White → Yellow → Orange → Green → Blue → Brown → Black — separately for each topic (C++, Python, Networking…). Higher belts unlock harder challenges like **boss fights** (find 3 hidden bugs in one file) and **audit mode** (is there a bug at all?).
-
-The biggest reward? **Catching a real bug in Claude's code** and proving it with a failing test. That earns a trophy and a saved bug report.
-
-Show it off with `diffdojo badge`, which makes a little SVG badge for your GitHub profile.
-
-**Share your score** (Scores → Share my score, or `diffdojo share`): DiffDojo shows the exact card first, then publishes it as a gist on your own GitHub account, through the [GitHub CLI](https://cli.github.com) (`gh auth login` once). It holds numbers only (XP, belts, streak, accuracy, trophies, battles cleared, how many projects) plus your badge, never code, questions or project names (`--projects` adds names). Sharing again updates the same gist; `diffdojo share --remove` deletes it; `--secret` makes it unlisted.
-
-**Fair play:** each question pays XP once, however often it comes back (battles, Bug Hunter and Prepare can't be farmed), and practice XP is capped at 300 a day; questions about Claude's real changes aren't capped. Scores are still self-reported: the data lives on your machine, so anyone determined could edit it ([details](docs/REWARDS.md#what-this-cant-stop)).
-
----
-
-## Getting started
-
-**You need:** [Node.js](https://nodejs.org) 22.5 or newer and git. That's it — no `npm install` required.
-*(Optional: Python and a C++ compiler unlock more question types.)*
-
-**1. Install the plugin**
-
-In Claude Code, type:
+In Claude Code:
 
 ```
 /plugin install diffdojo --marketplace Ninjacornix/Diffdojo
 ```
 
-Answer `y` to add the marketplace and pick a scope (user is the usual choice). From a shell, the same thing is `claude plugin install diffdojo --marketplace Ninjacornix/Diffdojo`. In the desktop app: click + next to the prompt box, then Plugins, Add marketplace with `Ninjacornix/Diffdojo`, then Add plugin.
+Say yes to adding the marketplace and pick a scope ("user" is what most people want). From a shell it's `claude plugin install diffdojo --marketplace Ninjacornix/Diffdojo`. In the desktop app, click the + next to the prompt box, then Plugins, add the marketplace `Ninjacornix/Diffdojo`, and add the plugin.
 
-Updates arrive with `/plugin` (or `claude plugin update diffdojo`).
+To update later: `/plugin`, or `claude plugin update diffdojo`. Restart Claude Code afterwards.
 
-**2. Or run it from a checkout** (for hacking on DiffDojo itself)
+That's all. DiffDojo turns itself on in every project you open, with or without git. It leaves your home folder and drive roots alone, so open Claude Code in an actual project folder.
+
+## What it looks like
+
+While Claude works, the current question shows up in a small box above your prompt:
+
+```
+╭──────────────────────────────────────────────────────────────────╮
+│ DiffDojo · Design · Data structure · verified · 10 XP            │
+│ `jobs` is declared in sched.py:8 in Claude's change. What is it? │
+│ 1 a) dict                                                        │
+│ 2 b) list used as a binary heap (heapq)                          │
+│ 3 c) set                                                         │
+│ 4 d) tuple                                                       │
+│ Press 1-4 in the empty prompt · Skip  Snooze  Bad question  Hide │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+Press 1 to 4 while your prompt is empty. For typed answers (a line number, an output), press ctrl+x tab to get into the answer box. `/dojo` opens a side pane with the whole question and its code.
+
+Or turn it into a fight. Type `/battle` and questions become a little turn-based RPG battle in a pane next to the chat, drawn in ASCII in your terminal's own colours (the picture at the top is a real frame). Pick an answer with up/down and Enter. Get it right and you hit the enemy; get it wrong and it hits you back. Your health bar is a token budget, and when you get hit you can watch tokens like `▁def`, `await` and `</s>` fall out of it. You get three lives per ladder.
+
+Once battle mode is on, the fight opens whenever you send Claude a prompt. Esc takes you back to your prompt, `/battle off` goes back to the plain box, and `/battle` brings the fight back.
+
+## Where the questions come from
+
+**Claude writes some of them.** After each change, a small, cheap model (Claude Haiku by default) looks at the changed code in the background and writes a few multiple-choice questions about it. Something like "two jobs are added with the same time; which one does `due(5)` return first?" A second call answers each question without seeing the answer key, and a question is only kept if both agree. This uses your own Claude plan and never shows up in your conversation. More on what gets sent below.
+
+**DiffDojo builds others itself**, from the code, with no model involved:
+
+- "Claude used `std::lock_guard` here. What does it do?" for APIs it recognises in the change.
+- "What does `clamp(5, 10, 0)` return?" DiffDojo runs the function to get the real answer.
+- "What container is `pending_`, and what does it cost to pop from it?"
+- In the plain quiz there's also spot-the-bug (one line of Claude's function quietly broken), write-a-test-that-catches-it, and "why did Claude do this?", checked against what Claude actually said in your session.
+
+**And there are 270-odd hand-written questions** on C++, concurrency, Linux networking, Python, JavaScript/TypeScript and algorithms, picked by what you're working on. If you're writing epoll code, you'll get epoll questions.
+
+## The battle menu
+
+`/battle` opens a menu with a few screens:
+
+- **Fight**: the ladders. Easy, Medium, Hard, Professional (its last boss is Evil Claude), and Endless, where the waves keep getting tougher.
+- **Special fights**: No Mercy and Bug Hunter, both described below.
+- **Prepare**: pick a topic, or type one ("Rust lifetimes"), and Claude writes a set of questions on it for your next fights. Without Claude, they come from the question packs.
+- **Scores**: your XP, belt, streak and accuracy across all your projects, plus a line per project.
+- **Achievements**: belts and trophies. Each trophy has its own little ASCII picture.
+- **Settings**: which model writes your questions (Haiku, Sonnet or Opus), how much effort it puts in, and whether Claude writes questions at all. Bigger model or more effort means harder questions and more of your plan used.
+
+### Bug Hunter
+
+The enemy here is FREE CHINESE LLM. It "optimises" one of the functions Claude wrote for you and slips a bug in. You get the broken function and pick the line that fixes it. The wrong choices often include leaving the line as it is. For Python and JavaScript, DiffDojo runs both versions first to make sure the bug really changes the result. The bug only exists inside the question; your files are never touched.
+
+### No Mercy
+
+This one is for when you really want to keep up with Claude. You fight SKYNET, and neither of you has a health bar. While the fight is on, SKYNET stops every edit Claude tries to make for your prompt and asks you about it first, in the battle pane. Usually that's "which line did Claude write here?" with the real line hidden among look-alikes, or "what does this API do?"
+
+Answer right and the edit goes through. Answer wrong, or skip the question, and you lose on the spot: the edit is rejected and Claude stops, so you can go and look at what it was doing. If Claude finishes your prompt and you answered for every edit, SKYNET falls.
+
+It only starts when you pick it (from Special fights, or with `/nomercy`), it shows you this warning first, and RUN or `/nomercy off` ends it. Edits to non-code files like Markdown or JSON go straight through. If DiffDojo itself fails to build a question, the edit goes through rather than blocking you.
+
+## Try it without asking Claude for anything
+
+```bash
+diffdojo demo     # creates ~/diffdojo-demo with a fake Claude change, already turned into questions
+cd ~/diffdojo-demo
+diffdojo battle   # the battle, right in this terminal, no Claude Code needed
+```
+
+You can also open the demo folder in Claude Code and type `/battle` or `/dojo`.
+
+## Belts, XP and trophies
+
+Right answers give XP. Each topic (C++, Python, networking and so on) has its own belt, from white to black, and moving up takes a short belt exam. Higher belts unlock boss fights (find three hidden bugs in one file) and audit mode (is there even a bug?).
+
+The best thing you can do is catch a real bug in Claude's code and prove it with a failing test (`/diffdojo:report-bug`). That gets you a trophy and a saved bug report.
+
+`diffdojo badge` makes a small SVG badge for your GitHub profile. `diffdojo share` (or Share in the Scores screen) puts your score card in a gist on your own GitHub account using the [GitHub CLI](https://cli.github.com). Run `gh auth login` once first. It shows you exactly what will be published before it does anything. The card has numbers only, never code or project names. Sharing again updates the same gist, and `diffdojo share --remove` deletes it.
+
+To keep things fair, each question pays XP once no matter how often it comes back, and practice (pack questions, battles, Bug Hunter, prepared topics) is capped at 300 XP a day. Questions about Claude's real changes aren't capped. Scores are still self-reported, since the data lives on your machine, and anyone who really wants to can edit it ([more on that](docs/REWARDS.md#what-this-cant-stop)).
+
+## Privacy, and what leaves your machine
+
+- Your progress, questions and answers are stored in `~/.diffdojo/`. Nothing is written into your project.
+- **Claude-written questions are on by default.** To write them, DiffDojo sends short excerpts of the changed code (about 160 lines at most) to Claude with `claude -p`, on your own plan, at most 30 times an hour. Files on the deny list (`.env`, keys, lockfiles, build output and so on) are never included, and any excerpt that looks like it contains a secret is dropped. These calls are handled like any other Claude Code request under your account's terms. If the code is confidential, turn them off:
+
+  ```bash
+  diffdojo config set model.enabled false            # this project
+  diffdojo config set model.enabled false --global   # everywhere
+  ```
+
+  With that off, nothing leaves your machine and you get DiffDojo's own questions only.
+- Your score leaves your machine only when you share it.
+- To answer "what does this return?", DiffDojo runs functions from Claude's change. On Linux (with bubblewrap installed) and macOS that happens in a sandbox with no network and no write access to your files. On Windows there's no sandbox, just a timeout and an environment with API keys and tokens stripped out. If that worries you, `diffdojo config set snippetSandbox require --global` skips those questions wherever there's no sandbox. `diffdojo doctor` tells you which one you have.
+- The only project command DiffDojo ever runs is the test command you give it (`/diffdojo:start npm test`), and only in a temporary copy of your project.
+- The background work doesn't hold Claude up. No Mercy is the exception: there, holding up Claude's edits is the whole point.
+- `diffdojo export` gives you all your data as one file, and `diffdojo purge --yes` deletes it.
+
+The details are in [Privacy & security](docs/PRIVACY_AND_SECURITY.md).
+
+## Turning it off
+
+- In one project: `/diffdojo:stop` (and `/diffdojo:start` to turn it back on).
+- Everywhere, unless you opt in per project: `diffdojo config set autoEnable false --global`.
+- Just the battle: `/battle off`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/battle` | Open the battle and its menu (`/battle off`, `/battle menu`) |
+| `/dojo` | Open the question pane next to the chat |
+| `/nomercy` | Fight SKYNET for your next prompt (`/nomercy off` ends it) |
+| `/diffdojo:start [test command]` | Turn DiffDojo on here, optionally with your test command |
+| `/diffdojo:stop` | Turn it off here |
+| `diffdojo quiz` | Answer your questions in a terminal (`--topic networking` to practise a topic) |
+| `diffdojo battle` | The battle, in a terminal |
+| `diffdojo stats` | Belts, XP, accuracy, streak, trophies and projects |
+| `diffdojo review` | Retry the questions you got wrong |
+| `diffdojo exam cpp` | Take your next belt exam in a topic |
+| `diffdojo serve` | The quiz in your browser (local only) |
+| `diffdojo badge` | Make a profile badge |
+| `diffdojo share` | Share your score card as a gist (`--yes` to publish, `--remove` to delete) |
+| `diffdojo doctor` | Check your setup |
+
+In the terminal quiz, type your answer, or `s` to skip, `z` to snooze, `b` to flag a bad question and `q` to quit. `diffdojo help` lists everything else.
+
+The `diffdojo` command is available inside Claude Code automatically. To use it in your own terminal, run `npm link` in a checkout of this repo, or call `node /path/to/Diffdojo/bin/diffdojo` directly.
+
+## Working on DiffDojo
 
 ```bash
 git clone https://github.com/Ninjacornix/Diffdojo.git
@@ -126,119 +158,21 @@ cd your-project
 claude --plugin-dir /path/to/Diffdojo
 ```
 
-For the terminal commands (`diffdojo quiz`, `diffdojo battle`, `diffdojo demo`) run `npm link` in the checkout, or use `node /path/to/Diffdojo/bin/diffdojo <command>`. Inside Claude Code the plugin puts `diffdojo` on the Bash tool's PATH by itself.
-
-**3. That's it — it's already on**
-
-DiffDojo starts automatically in every project you open with the plugin enabled, **git or not**; there's nothing to switch on. In a folder without git, DiffDojo tracks Claude's changes with a private shadow repository in `~/.diffdojo/`, so nothing is ever written into your folder. (It skips your home folder and drive roots: open Claude Code in a project folder.) Your XP, belts and trophies are tracked across all your projects (`diffdojo stats` shows them, plus a list of every project).
-
-Optional: tell it how to run a project's tests, which unlocks more question types:
-
-```
-/diffdojo:start npm test
-```
-
-Don't want it in some project? Type `/diffdojo:stop` there. Prefer to opt in per project instead? Run `diffdojo config set autoEnable false --global` and use `/diffdojo:start` where you want it.
-
-**4. Keep working — questions pop up right inside Claude Code**
-
-While Claude is working, the current question appears in a box just above your prompt:
-
-```
-╭──────────────────────────────────────────────────────────────╮
-│ DiffDojo · Design · Data structure · verified · 10 XP     │
-│ `jobs` is declared in sched.py:8 in Claude's change. What is it? │
-│ 1 a) dict                                                    │
-│ 2 b) list used as a binary heap (heapq)                      │
-│ 3 c) set                                                     │
-│ 4 d) tuple                                                   │
-│ Press 1-4 in the empty prompt · Skip  Snooze  Bad question  Hide │
-╰──────────────────────────────────────────────────────────────╯
-```
-
-- **Multiple choice:** just press **1–4** while your prompt is empty.
-- **Typed answers** (line numbers, outputs): press **ctrl+x tab** to jump into the answer box, type, and hit Enter.
-- **`/dojo`** opens a side pane with the full question and its code.
-- The status line shows how many questions are waiting, and a small pop-up tells you when new ones arrive.
-
-Questions about a change appear shortly after Claude finishes it; in between, you get concept quizzes on the topics you're working in. Answer whenever you like, or not at all — none of this is ever shown to Claude.
-
-**Prefer a separate window?** Use `diffdojo quiz` in a second terminal, or `diffdojo serve` for a browser page.
-*(No `npm link`? Use `node /path/to/Diffdojo/bin/diffdojo quiz`.)*
-
----
-
-## Handy commands
-
-| Command | What it does |
-|---|---|
-| `/dojo` (in Claude Code) | Open the quiz pane beside the chat |
-| `/battle` (in Claude Code) | Open the battle; `/battle menu`, `/battle off` |
-| `/nomercy` (in Claude Code) | Fight SKYNET: answer for every edit Claude makes for your next prompt (`/nomercy off` ends it) |
-| `diffdojo quiz` | Answer your queued questions in a terminal |
-| `diffdojo quiz --topic networking` | Practice a topic — no Claude session needed |
-| `diffdojo stats` | Your belts, XP, accuracy, streak, trophies and projects — across everything (`--repo` for just this one) |
-| `diffdojo review` | Retry questions you got wrong |
-| `diffdojo exam cpp` | Take your next belt exam in a track |
-| `diffdojo serve` | Quiz in your browser (local only) |
-| `diffdojo badge` | Make a badge for your profile |
-| `diffdojo share` | Publish your score card as a GitHub Gist (shows it first; `--yes` to publish, `--remove` to delete) |
-| `diffdojo doctor` | Check that everything is set up right |
-
-While quizzing: type your answer, or `s` to skip, `z` to snooze, `b` to flag a bad question, `q` to quit.
-
-In Claude Code: `/diffdojo:start`, `/diffdojo:stop`, `/diffdojo:stats`, `/diffdojo:report-bug`, `/diffdojo:topics`.
-
-Run `diffdojo help` for everything else.
-
----
-
-## Your data stays yours
-
-- **Your choice where it runs.** It's on in every project folder by default, git or not; `/diffdojo:stop` turns it off for one project, and `diffdojo config set autoEnable false --global` makes it opt-in everywhere.
-- **Stored locally.** Your progress and questions live in `~/.diffdojo/`, never in your repo, never on a server. Your score leaves your machine only if you share it (a gist on your own GitHub account, numbers only).
-- **Never slows Claude down.** All the work happens in the background, after Claude finishes a turn.
-- **Stays out of your conversation.** Nothing is ever injected into your chat with Claude; questions are written by a separate background call.
-- **Safe with your code.** Code only ever runs in a temporary copy, and the only project command DiffDojo will run is the test command you gave it. Files like `.env` and keys are skipped, and anything that looks like a secret is filtered out.
-- **Claude's code runs boxed in.** To check "what does this return?" answers, DiffDojo runs functions from Claude's change. On Linux (with bubblewrap) and macOS that happens in a sandbox with no network that can't write to your files; on Windows there's no sandbox, only a timeout and an environment stripped of API keys and tokens. Run `diffdojo config set snippetSandbox require --global` to skip those questions where no sandbox is available. Details in [Privacy & security](docs/PRIVACY_AND_SECURITY.md#execution-safety).
-- **You're in control.** `diffdojo export` gives you all your data as one file; `diffdojo purge --yes` deletes it.
-
-**Claude writes the questions (on by default):** after each change, DiffDojo runs `claude -p` on your own Claude plan with a cheap model (`claude-haiku-5-5`) and short excerpts of the changed code (at most ~160 lines, never files matching the deny list, never anything that looks like a secret). That's at most 30 small calls an hour. The excerpts are handled like any other Claude Code request under your account's terms. **For confidential code, turn it off:**
+The easiest way to help is with more questions. Packs are plain YAML files in [`packs/`](packs/), and you can keep private ones in `~/.diffdojo/packs/`.
 
 ```bash
-diffdojo config set model.enabled false            # this project
-diffdojo config set model.enabled false --global   # every project
-```
-
-With it off, everything stays on your machine and you get DiffDojo's own questions only. `diffdojo config set model.model claude-sonnet-5-5` picks a different model.
-
----
-
-## Contributing
-
-Contributions are very welcome — especially **new quiz questions**! Packs are simple YAML files in [`packs/`](packs/). You can also keep your own private packs in `~/.diffdojo/packs/`.
-
-```bash
-npm test          # run the test suite
+npm test          # unit and end-to-end tests
 npm run test:ui   # the in-app UI tests (needs the claude CLI)
-npm run pack-ci   # validate all question packs (and run their code snippets)
+npm run pack-ci   # check every question pack and run its code snippets
 npm run lint      # syntax-check every source file
 ```
 
-CI runs all of these on Linux, macOS and Windows for every pull request.
-
-Want to know how it works under the hood? See the design docs:
-[Product requirements](docs/PRODUCT_REQUIREMENTS.md) ·
-[Architecture](docs/ARCHITECTURE.md) ·
-[Questions & grading](docs/QUESTIONS_AND_GRADING.md) ·
-[Rewards](docs/REWARDS.md) ·
-[Privacy & security](docs/PRIVACY_AND_SECURITY.md) ·
-[Roadmap](docs/ROADMAP.md)
+CI runs these on Linux, macOS and Windows with Node 22 and 24. The design docs explain how it all fits together: [product requirements](docs/PRODUCT_REQUIREMENTS.md), [architecture](docs/ARCHITECTURE.md), [questions and grading](docs/QUESTIONS_AND_GRADING.md), [rewards](docs/REWARDS.md), [privacy and security](docs/PRIVACY_AND_SECURITY.md) and the [roadmap](docs/ROADMAP.md).
 
 ## Status
 
-Version 0.2 — early, but working. CI tests every change on Linux, macOS and Windows with Node 22 and 24; see the [changelog](CHANGELOG.md). Found a problem? Please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
+Version 0.3. It's young, so expect rough edges. The [changelog](CHANGELOG.md) has what changed, and if something breaks, please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
 
 ## License
 
-[MIT](LICENSE) — free to use, change and share.
+[MIT](LICENSE).
