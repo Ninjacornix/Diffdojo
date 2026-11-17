@@ -179,6 +179,41 @@ test('health is a token budget, and a hit spills tokens out of the bar', async (
   }
 });
 
+test('No Mercy: no health bars, one wrong answer loses, Claude finishing the prompt defeats SKYNET', () => {
+  battle.start('nomercy');
+  let v = battle.view();
+  assert.strictEqual(v.enemy.name, 'SKYNET');
+  assert.strictEqual(v.noHealth, true);
+  assert.ok(battle.noMercyActive());
+  assert.match(battle.nextQuestion(db, {}).error, /only asks about the edits/);
+  // Claude's turn ends before any edit: nothing happens, the fight waits for edits.
+  assert.strictEqual(battle.turnEnd(db, { reason: 'answer' }).victory, false);
+  assert.ok(battle.noMercyActive());
+  // Two edits answered right, then an interrupted turn: no win.
+  assert.strictEqual(battle.intercept(db, { correct: true, file: 'a.py' }).passed, 1);
+  assert.strictEqual(battle.intercept(db, { correct: true, file: 'b.py' }).passed, 2);
+  assert.strictEqual(battle.turnEnd(db, { reason: 'aborted' }).victory, false);
+  // Claude finishes: SKYNET falls, with a trophy, and the gate is off.
+  const end = battle.turnEnd(db, { reason: 'answer' });
+  assert.strictEqual(end.victory, true);
+  assert.strictEqual(end.passed, 2);
+  assert.strictEqual(battle.load().phase, 'victory');
+  assert.ok(!battle.noMercyActive());
+  // Again: one wrong answer ends it at once.
+  battle.resume();
+  assert.ok(battle.noMercyActive());
+  assert.strictEqual(battle.view().passed, 0);
+  const lost = battle.intercept(db, { correct: false, answerText: 'heap', file: 'a.py' });
+  assert.strictEqual(lost.defeat, true);
+  assert.strictEqual(battle.load().phase, 'gameover');
+  assert.ok(!battle.noMercyActive());
+  assert.strictEqual(battle.intercept(db, { correct: true }), null, 'no fight, no intercepts');
+  // Other modes never gate edits.
+  battle.start('easy');
+  assert.ok(!battle.noMercyActive());
+  assert.strictEqual(battle.intercept(db, { correct: true }), null);
+});
+
 test('the terminal game: RUN ends the battle and goes back to the menu', async () => {
   const term = require('../src/battle-term');
   const scene = await term.loadScene();

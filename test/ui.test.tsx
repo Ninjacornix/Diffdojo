@@ -271,22 +271,52 @@ test('battle: picking a mode outside a git repository starts the fight', async (
   await ui.unmount()
 })
 
-// ---------------- No Mercy ----------------
+// ---------------- No Mercy: the fight against SKYNET ----------------
 
-/** The CLI with No Mercy on: one gate whose right answer is "heap". */
-function fakeGate(on: any, { noMercy = true, gate = true } = {}) {
+const SKYNET_FIGHT = {
+  mode: 'nomercy', modeLabel: 'No Mercy', phase: 'fight', stage: 0, stages: 1, wave: 1, lives: 3, maxLives: 3,
+  player: { name: 'MILAN', hp: 100, maxHp: 100 },
+  enemy: { id: 'skynet', name: 'SKYNET', level: 100, hp: 1, maxHp: 1, boss: true, color: '#e0533d' },
+  best: {}, wins: {}, hasQuestion: false, noHealth: true, passed: 0,
+}
+
+/** The CLI with a SKYNET fight on (or not): one gate whose right answer is "heap". */
+function fakeGate(on: any, { fighting = true, gate = true } = {}) {
   const calls: string[][] = []
+  let phase = fighting ? 'fight' : 'menu'
+  let passed = 0
+  const state = () => (phase === 'menu' ? { ...SKYNET_FIGHT, phase: 'menu', mode: null, enemy: null } : { ...SKYNET_FIGHT, phase, passed })
   on('process.run', (_: unknown, e: any) => {
     const argv: string[] = e.argv ?? e[0] ?? []
     const args = argv.slice(argv.indexOf('api') + 1)
     calls.push(args)
-    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', noMercy }
-    if (args[0] === 'battle-state') body = { ...body, battle: false, state: { phase: 'menu', mode: null } }
+    let body: Record<string, unknown> = { enabled: true, battleAllowed: true, queued: 0, header: '', noMercy: phase === 'fight' }
+    if (args[0] === 'battle-state') body = { ...body, battle: true, state: state() }
+    if (args[0] === 'battle-start' && args[1] === 'nomercy') {
+      phase = 'fight'
+      passed = 0
+      body = { state: state() }
+    }
+    if (args[0] === 'battle-quit') {
+      phase = 'menu'
+      body = { state: state() }
+    }
     if (args[0] === 'gate')
       body = gate
         ? { id: 42, file: 'sched.py', prompt: 'What is `jobs`?', code: 'heapq.heappush(self.jobs, job)', options: ['dict', 'heap', 'set', 'tuple'] }
         : { skip: 'no question for README.md (not code)' }
-    if (args[0] === 'gate-answer') body = { ...body, correct: args[2] === 'heap', xp: 10, answerText: 'heap', explanation: 'heapq keeps the list a binary heap.' }
+    if (args[0] === 'gate-answer') {
+      const correct = args[2] === 'heap'
+      if (correct) passed++
+      else phase = 'gameover'
+      body = { ...body, correct, xp: 10, answerText: 'heap', explanation: 'heapq keeps the list a binary heap.',
+        fight: { intercept: true, correct, passed, file: 'sched.py', enemyName: 'SKYNET', playerName: 'MILAN', trophies: [], defeat: !correct, state: state() } }
+    }
+    if (args[0] === 'battle-turn-end') {
+      const won = phase === 'fight' && args[1] === 'answer' && passed > 0
+      if (won) phase = 'victory'
+      body = { victory: won, passed, trophies: won ? [{ id: 'skynet', name: 'Judgment Averted' }] : [], state: state() }
+    }
     return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
   })
   return calls
@@ -310,7 +340,7 @@ function person(on: any, label: string | null) {
 
 const EDIT = { tool: 'Edit', file_path: '/p/sched.py', old_string: 'x = 1', new_string: 'x = 2' }
 
-test('no mercy: a right answer lets the edit through', async ($, on) => {
+test('no mercy: during a SKYNET fight a right answer lets the edit through', async ($, on) => {
   const calls = fakeGate(on)
   const seen = person(on, 'heap')
   await boot($, on)
@@ -323,13 +353,18 @@ test('no mercy: a right answer lets the edit through', async ($, on) => {
   expect(r.deny).toBeUndefined()
 })
 
-test('no mercy: a wrong answer rejects the edit and tells Claude to stop', async ($, on) => {
+test('no mercy: one wrong answer rejects the edit, tells Claude to stop and ends the fight', async ($, on) => {
   fakeGate(on)
   const seen = person(on, 'dict')
   await boot($, on)
   const r: any = await $.tool.call(EDIT as any)
   expect(seen.applied).toBe(false)
   expect(String(r.deny ?? r.text)).toContain('Stop working')
+  // The fight is over: the next edit goes through without a question.
+  seen.asked.length = 0
+  await $.tool.call(EDIT as any)
+  expect(seen.asked.length).toBe(0)
+  expect(seen.applied).toBe(true)
 })
 
 test('no mercy: closing the question counts as wrong', async ($, on) => {
@@ -341,8 +376,8 @@ test('no mercy: closing the question counts as wrong', async ($, on) => {
   expect(String(r.deny ?? r.text)).toContain('rejected')
 })
 
-test('no mercy: off, or a file with no question, never asks', async ($, on) => {
-  const calls = fakeGate(on, { noMercy: false })
+test('no mercy: without a SKYNET fight, edits are never stopped', async ($, on) => {
+  const calls = fakeGate(on, { fighting: false })
   const seen = person(on, 'heap')
   await boot($, on)
   await $.tool.call(EDIT as any)
@@ -360,14 +395,38 @@ test('no mercy: an edit DiffDojo has no question for goes through', async ($, on
   expect(seen.applied).toBe(true)
 })
 
-test('no mercy: /nomercy toggles the mode', async ($, on) => {
-  const calls = fakeGate(on, { noMercy: false })
+test('no mercy: SKYNET falls when Claude finishes the prompt with every edit answered', async ($, on) => {
+  const calls = fakeGate(on)
+  person(on, 'heap')
+  const logs: string[] = []
+  on('ui.log', (_: unknown, e: any) => {
+    logs.push(String(e.text ?? ''))
+    return { value: undefined }
+  })
+  on('turn.complete', () => ({ text: 'done' }))
+  await boot($, on)
+  await $.tool.call(EDIT as any)
+  await $.tool.call(EDIT as any)
+  const pane = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await $.turn.complete({ answer: 'done', durationMs: 1000, isAborted: false, turnId: 't1', reason: 'answer' } as any)
+  expect(calls.some(c => c[0] === 'battle-turn-end' && c[1] === 'answer')).toBe(true)
+  expect(logs.some(l => l.includes('SKYNET falls'))).toBe(true)
+  expect(await pane.find({ type: 'Text', text: /V I C T O R Y/ })).toBeTruthy()
+  await pane.unmount()
+})
+
+test('no mercy: /nomercy shows SKYNET and its warning; /nomercy off ends the fight', async ($, on) => {
+  const calls = fakeGate(on, { fighting: false })
   person(on, 'heap')
   await boot($, on)
-  const r: any = await $.command.run({ command: 'nomercy', args: 'on' } as any)
-  expect(String(r.text)).toContain('No Mercy is on')
-  expect(String(r.text)).toContain('SKYNET')
-  expect(calls.some(c => c.join(' ').includes('config set noMercy true --global') || (c[0] === 'config' && c[2] === 'noMercy'))).toBe(true)
+  const r: any = await $.command.run({ command: 'nomercy', args: '' } as any)
+  expect(String(r.text)).toContain('Fight SKYNET')
+  const pane = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  expect(await pane.find({ type: 'Text', text: /SKYNET guards your files/ })).toBeTruthy()
+  await pane.unmount()
+  const off: any = await $.command.run({ command: 'nomercy', args: 'off' } as any)
+  expect(String(off.text)).toContain('Claude edits freely')
+  expect(calls.some(c => c[0] === 'battle-quit')).toBe(true)
 })
 
 // ---------------- Claude writes the questions ----------------
@@ -408,18 +467,21 @@ test('battle: RUN ends the fight and goes back to the menu', async ($, on) => {
   await ui.unmount()
 })
 
-test('battle menu: No Mercy opens SKYNET, which turns the mode on and off', async ($, on) => {
-  const calls = fakeBattle(on)
+test('battle menu: No Mercy shows SKYNET\'s warning, then starts the fight with no health bars', async ($, on) => {
+  const calls = fakeGate(on, { fighting: false })
+  person(on, 'heap')
   await boot($, on)
   const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
-  expect(await ui.find({ type: 'Text', text: /N O   M E R C Y/ })).toBeFalsy()
   await ui.select({ key: 'mode', value: 'nomercy' })
   expect(await ui.find({ type: 'Text', text: /N O   M E R C Y/ })).toBeTruthy()
-  expect(await ui.find({ type: 'Text', text: /No Mercy: OFF/ })).toBeTruthy()
-  await ui.select({ key: 'skynet', value: 'toggle' })
-  expect(calls.some(c => c.join(' ').includes('config set noMercy true --global'))).toBe(true)
-  expect(await ui.find({ type: 'Text', text: /No Mercy: ON/ })).toBeTruthy()
-  await ui.select({ key: 'skynet', value: 'menu' })
-  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Answer wrong and SKYNET rejects it and Claude stops/ })).toBeTruthy()
+  await ui.select({ key: 'skynet', value: 'fight' })
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'nomercy')).toBe(true)
+  await ui.select({ key: 'intro', value: 'go' })
+  await ui.select({ key: 'intro', value: 'go' })
+  expect(calls.some(c => c[0] === 'battle-question')).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /no health bar/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /TOKENS/ })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /SKYNET is watching Claude/ })).toBeTruthy()
   await ui.unmount()
 })

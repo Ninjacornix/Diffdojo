@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+### Changed
+- **No Mercy is a fight against SKYNET**, not an on/off setting. Pick it in the battle menu (its warning comes first) or type `/nomercy`. Neither side has a health bar. SKYNET intercepts every edit Claude makes for your prompt and asks about it: one wrong (or skipped) answer and you lose, the edit is rejected and Claude stops. SKYNET falls when Claude finishes the prompt with every edit answered (trophy: *Judgment Averted*). RUN or `/nomercy off` ends the fight. The `noMercy` setting and `/nomercy on` are gone.
+- `diffdojo battle` (the terminal game) starts at the menu when a No Mercy fight is on, since that fight happens in Claude Code.
+
 ## 0.2.1
 
 ### Added
-- **No Mercy in the battle menu**: a last row in the menu opens SKYNET's screen, where No Mercy is switched on and off.
+- **No Mercy in the battle menu**: a last row in the menu opens SKYNET's screen.
 - **RUN** in every fight (in Claude Code and `diffdojo battle`): ends the battle and goes back to the menu.
 - **Health is a token budget**: the bars are TOKENS bars, damage is in tokens, and each hit spills token-like words (`▁def`, `await`, `##ing`, `</s>`...) out of the bar of whoever was hit.
 - SKYNET has its own sprite on No Mercy's screen in the battle menu.

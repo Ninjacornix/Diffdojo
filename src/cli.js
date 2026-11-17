@@ -357,7 +357,7 @@ const commands = {
    * Machine interface for the in-app UI (hooks/ui.tsx): one JSON object on stdout.
    *   api status | next | fill | answer <id> <response...> | skip <id> | snooze <id> | bad <id>
    *   api gate (tool call JSON on stdin) | gate-answer <id> <label or letter>   (No Mercy)
-   *   api battle-state | battle-start <mode> | battle-question | battle-answer <a-d> | battle-quit | battle-resume
+   *   api battle-state | battle-start <mode> | battle-question | battle-answer <a-d> | battle-quit | battle-resume | battle-turn-end <reason>
    */
   async api({ pos }) {
     const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
@@ -384,16 +384,15 @@ const commands = {
       // Told once: Claude writes questions from code excerpts (model path, on by default).
       const noticeFile = path.join(util.home(), 'model-notice.json');
       const modelNotice = !!(cfg.model && cfg.model.enabled && enabled && !fs.existsSync(noticeFile));
-      return out({ ...status(), battle: cfg.battle, noMercy: !!cfg.noMercy, modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
+      return out({ ...status(), battle: cfg.battle, noMercy: require('./battle').noMercyActive(), modelNotice, model: cfg.model && cfg.model.enabled ? cfg.model.model : null });
     }
     if (sub === 'model-notice-ack') {
       util.writeJson(path.join(util.home(), 'model-notice.json'), { at: util.nowIso() });
       return out({ ok: true });
     }
     if (sub === 'gate') {
-      // No Mercy: a question about the edit in the tool call on stdin.
-      const cfg = config.load(repoId);
-      if (!cfg.noMercy) return out({ skip: 'No Mercy is off' });
+      // No Mercy: while a fight against SKYNET is on, a question about the edit in the tool call on stdin.
+      if (!require('./battle').noMercyActive()) return out({ skip: 'no No Mercy fight is on' });
       if (root && !enabled) return out({ skip: 'DiffDojo is stopped here' });
       let input;
       try {
@@ -410,15 +409,18 @@ const commands = {
     }
     if (sub === 'gate-answer') {
       const r = await require('./gate').answer(d, pos[2], pos.slice(3).join(' '), { cfg: config.load(repoId), root });
-      return out({ ...r, ...status() });
+      // SKYNET's ability lands in the fight: a right answer hits it, a wrong one costs you tokens.
+      const hit = r.error ? null : require('./battle').intercept(d, r);
+      return out({ ...r, ...(hit ? { fight: hit } : {}), ...status() });
     }
     if (sub.startsWith('battle')) {
       const battle = require('./battle');
       try {
-        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, noMercy: !!config.load(repoId).noMercy, state: battle.view() });
+        if (sub === 'battle-state') return out({ ...status(), battle: config.load(repoId).battle, noMercy: battle.noMercyActive(), state: battle.view() });
         if (sub === 'battle-start') return out({ state: battle.view(battle.start(pos[2])) });
         if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
         if (sub === 'battle-resume') return out({ state: battle.view(battle.resume()) });
+        if (sub === 'battle-turn-end') return out(battle.turnEnd(d, { reason: pos[2] }));
         if (sub === 'battle-question') return out(battle.nextQuestion(d, { repoId: enabled ? repoId : null }));
         if (sub === 'battle-answer') return out({ ...(await battle.answer(d, pos[2], { cfg: config.load(repoId), root })), ...status() });
       } catch (e) {

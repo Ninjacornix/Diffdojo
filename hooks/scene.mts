@@ -342,6 +342,10 @@ export type SceneView = {
   maxLives: number
   player: { name?: string; hp: number; maxHp: number }
   enemy: { id: string; name: string; level: number; hp: number; maxHp: number; boss: boolean } | null
+  /** No Mercy: no health bars on either side. */
+  noHealth?: boolean
+  /** No Mercy: edits answered right in this fight. */
+  passed?: number
 }
 
 export type SceneInput = {
@@ -378,11 +382,20 @@ export function battlefield(s: SceneInput): Line[] {
   const shake = s.anim?.kind === 'enemyHit' && hit ? (s.anim.frame % 2 ? 2 : -1) : 0
   const eAt = Math.max(0, Math.min(W - eW, W - eW - 2 + slideIn + shake))
   const remaining = v.stages ? v.stages - v.stage : 1
+  const bossColor = e && e.id === 'skynet' ? PALETTE.skynet : PALETTE.boss
   const status: Line[] = !e
     ? []
+    : inPlace && v.noHealth
+      ? [
+          [seg(' ' + e.name, bossColor, true)],
+          [seg(`      :L${e.level}`, PALETTE.ink, true)],
+          [seg('   no health bar', PALETTE.mid)],
+          [seg(' │ falls when Claude is done', PALETTE.ink)],
+          [seg(' └' + '─'.repeat(26) + '▶', PALETTE.ink)],
+        ]
     : inPlace
       ? [
-          [seg(' ' + e.name, e.boss ? PALETTE.boss : PALETTE.ink, true)],
+          [seg(' ' + e.name, e.boss ? bossColor : PALETTE.ink, true)],
           [seg(`      :L${e.level}`, PALETTE.ink, true)],
           [seg('   '), ...hpBar(s.enemyHp, e.maxHp)],
           [seg(` │ ${v.stages ? balls(remaining, v.stages) : `WAVE ${v.wave}`}`, PALETTE.ink)],
@@ -391,7 +404,7 @@ export function battlefield(s: SceneInput): Line[] {
       : [
           [seg('')],
           [seg('')],
-          [seg(` │ ${v.stages ? balls(remaining, v.stages) : `WAVE ${v.wave}`}`, PALETTE.ink)],
+          [seg(v.noHealth ? ' │' : ` │ ${v.stages ? balls(remaining, v.stages) : `WAVE ${v.wave}`}`, PALETTE.ink)],
           [seg(' └' + '─'.repeat(26) + '▶', PALETTE.ink)],
         ]
   const top = Math.max(eSprite.length, status.length + 1)
@@ -412,7 +425,15 @@ export function battlefield(s: SceneInput): Line[] {
   const dodge = s.anim?.kind === 'dodge' && hit ? Math.min(s.anim.frame, 6 - s.anim.frame) : 0
   const pAt = Math.max(0, 2 - pSlide + pShake + dodge)
   const sx = Math.max(pW + 6, W - 31)
-  const pStatus: Line[] = inPlace
+  const pStatus: Line[] = inPlace && v.noHealth
+    ? [
+        [seg(v.player.name || 'YOU', PALETTE.ink, true)],
+        [seg('  one wrong answer: you lose', PALETTE.mid)],
+        [seg(`  edits passed: ${v.passed || 0}`, PALETTE.ink, true)],
+        [seg('')],
+        [seg('◀' + '─'.repeat(26) + '┘', PALETTE.ink)],
+      ]
+    : inPlace
     ? [
         [seg(v.player.name || 'YOU', PALETTE.ink, true)],
         [seg(`  ${balls(v.lives, v.maxLives)}  `, PALETTE.ink), seg(`${String(s.playerHp).padStart(3)}/${v.player.maxHp} tokens`, PALETTE.ink, true)],
@@ -431,7 +452,7 @@ export function battlefield(s: SceneInput): Line[] {
 
   // ---- tokens spilling out of the bar of whoever was hit, falling a row every few frames
   const kind = s.anim?.kind
-  if (inPlace && (kind === 'enemyHit' || kind === 'playerHit') && s.anim!.frame < ANIM_FRAMES) {
+  if (inPlace && !v.noHealth && (kind === 'enemyHit' || kind === 'playerHit') && s.anim!.frame < ANIM_FRAMES) {
     const barRow = kind === 'enemyHit' ? 2 : top + 1 + (rows - pStatus.length) + 2
     const barCol = kind === 'enemyHit' ? 8 : sx + 2 // the enemy's start clear of its stage balls
     const below = kind === 'enemyHit' ? 3 : 2 // rows under the bar the words can fall through

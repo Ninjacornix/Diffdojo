@@ -3,7 +3,11 @@
 // RPG battles (original characters). An enemy asks a question with four
 // answers; a correct answer burns its tokens, a wrong one lets it burn yours (health is a token budget). Your tokens
 // refill for each new enemy; lose 3 lives and the ladder starts over.
-// Modes: easy, medium, hard, professional (final boss: Evil Claude), endless.
+// Modes: easy, medium, hard, professional (final boss: Evil Claude), endless,
+// and No Mercy: SKYNET. No health bars on either side: SKYNET intercepts every
+// edit Claude makes for a prompt (hooks/nomercy.tsx) and asks about it. One
+// wrong answer and you lose (the edit is rejected, Claude stops); Claude
+// finishing the prompt with every edit answered defeats SKYNET.
 // State is global and kept in ~/.diffdojo/battle.json.
 
 const path = require('path');
@@ -36,6 +40,8 @@ const LADDERS = {
     { id: 'monolith', name: 'LEGACY MONOLITH', level: 55, hp: 140, dmg: 32 },
     { id: 'evil', name: 'EVIL CLAUDE', level: 99, hp: 180, dmg: 34, boss: true, color: '#d97757' },
   ],
+  // One enemy without health: it falls when Claude finishes the prompt (hp unused).
+  nomercy: [{ id: 'skynet', name: 'SKYNET', level: 100, hp: 1, dmg: 0, boss: true, color: '#e0533d' }],
 };
 
 const MISS_CHANCE = 0.2;
@@ -46,6 +52,7 @@ const MODES = {
   hard: { label: 'Hard', difficulties: ['hard', 'medium'] },
   professional: { label: 'Professional', difficulties: ['hard'], preferCode: true },
   endless: { label: 'Endless', difficulties: null },
+  nomercy: { label: 'No Mercy', difficulties: [], noHealth: true },
 };
 
 const PLAYER_MAX = 100;
@@ -136,13 +143,15 @@ function view(s = load()) {
     best: s.best,
     wins: s.wins,
     hasQuestion: !!s.pending,
+    noHealth: !!(s.mode && MODES[s.mode].noHealth),
+    passed: s.passed || 0, // No Mercy: edits answered right in this fight
   };
 }
 
 function start(mode) {
   if (!MODES[mode]) throw new Error(`unknown mode ${mode} (easy, medium, hard, professional, endless)`);
   const s = load();
-  Object.assign(s, { mode, stage: 0, wave: 1, lives: LIVES, playerHp: PLAYER_MAX, enemyHp: null, pending: null, phase: 'fight' });
+  Object.assign(s, { mode, stage: 0, wave: 1, lives: LIVES, playerHp: PLAYER_MAX, enemyHp: null, pending: null, phase: 'fight', passed: 0 });
   s.enemyHp = enemyOf(s).hp;
   return save(s);
 }
@@ -197,6 +206,7 @@ function toFour(q, rnd = Math.random) {
 function nextQuestion(db, { repoId, rnd = Math.random } = {}) {
   const s = load();
   if (!s.mode || s.phase !== 'fight') return { error: 'no battle in progress' };
+  if (MODES[s.mode].noHealth) return { error: 'SKYNET only asks about the edits Claude makes', state: view(s) };
   if (s.pending) {
     const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', s.pending.id));
     if (q && q.status !== 'answered') return { question: publicQ(q, s.pending), state: view(s) };
@@ -253,13 +263,59 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   const k = String(key).trim().toLowerCase();
   if (!p.map[k]) return { error: 'answer with a, b, c or d' };
   const graded = await require('./grader').answer(db, q, p.map[k], { mode: 'battle', cfg, root });
-  const correct = graded.correct === true;
+  const ev = exchange(db, s, graded.correct === true, q.difficulty, rnd, { correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, trophies: graded.trophies || [] });
+  s.pending = null;
+  save(s);
+  return { ...ev, state: view(s) };
+}
+
+/** Is a No Mercy fight on? Then SKYNET intercepts Claude's edits. */
+function noMercyActive(s = load()) {
+  return s.mode === 'nomercy' && s.phase === 'fight';
+}
+
+/**
+ * SKYNET's ability: Claude's edit was intercepted and the person answered a
+ * question about it. Right: the edit goes through. Wrong: you lose the fight
+ * (the edit is rejected and Claude stopped elsewhere). Null when no No Mercy fight is on.
+ */
+function intercept(db, { correct, xp, explanation, answerText, file: edited, trophies }) {
+  const s = load();
+  if (!noMercyActive(s)) return null;
+  const ev = { intercept: true, correct: !!correct, xp: xp || 0, explanation: explanation || null, correctKey: answerText || null, file: edited || null, enemyName: 'SKYNET', playerName: playerName(), trophies: trophies || [] };
+  if (correct) s.passed = (s.passed || 0) + 1;
+  else {
+    ev.defeat = true;
+    s.phase = 'gameover';
+  }
+  ev.passed = s.passed || 0;
+  save(s);
+  return { ...ev, state: view(s) };
+}
+
+/**
+ * Claude's turn ended. If it finished on its own (not interrupted) after at
+ * least one intercepted edit, every change for the prompt is in: SKYNET falls.
+ */
+function turnEnd(db, { reason }) {
+  const s = load();
+  if (!noMercyActive(s) || reason !== 'answer' || !s.passed) return { victory: false, state: view(s) };
+  s.phase = 'victory';
+  s.wins.nomercy = (s.wins.nomercy || 0) + 1;
+  const t = require('./rewards').grant(db, 'skynet', `Claude finished a prompt with ${s.passed} edit(s), every one answered`);
+  save(s);
+  return { victory: true, passed: s.passed, trophies: t ? [t] : [], state: view(s) };
+}
+
+/** One exchange of blows, applied to state `s` (not saved). */
+function exchange(db, s, correct, difficulty, rnd, extra) {
   const enemy = enemyOf(s);
-  const ev = { correct, correctKey: p.correctKey, picked: k, xp: graded.xp, explanation: q.explanation, enemyName: enemy.name, playerName: playerName(), trophies: graded.trophies || [] };
+  const ev = { correct, ...extra, enemyName: enemy.name, playerName: playerName() };
+  ev.trophies = ev.trophies || [];
   ev.enemyHpBefore = s.enemyHp;
   ev.playerHpBefore = s.playerHp;
   if (correct) {
-    ev.damage = DAMAGE[q.difficulty] || 40;
+    ev.damage = DAMAGE[difficulty] || 40;
     s.enemyHp = Math.max(0, s.enemyHp - ev.damage);
     ev.enemyHpAfter = s.enemyHp; // what the hit left, before any next enemy appears
     if (s.enemyHp === 0) {
@@ -308,18 +364,16 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   }
   if (ev.enemyHpAfter === undefined) ev.enemyHpAfter = ev.enemyHpBefore;
   if (ev.playerHpAfter === undefined) ev.playerHpAfter = ev.playerHpBefore;
-  s.pending = null;
-  save(s);
-  return { ...ev, state: view(s) };
+  return ev;
 }
 
 /** After a game over or a victory screen: fight on (same mode, from the start). */
 function resume() {
   const s = load();
   if (!s.mode) return save(s);
-  if (s.phase === 'victory') return start(s.mode);
+  if (s.phase === 'victory' || MODES[s.mode].noHealth) return start(s.mode);
   s.phase = 'fight';
   return save(s);
 }
 
-module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };
+module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, intercept, turnEnd, noMercyActive, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };

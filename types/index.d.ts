@@ -48,6 +48,10 @@ export type BattleView = {
   best: Record<string, number>
   wins: Record<string, number>
   hasQuestion: boolean
+  /** No Mercy: no health bars on either side. */
+  noHealth?: boolean
+  /** No Mercy: edits answered right in this fight. */
+  passed?: number
 }
 
 /** A battle question: always four answers, a-d. */
@@ -85,6 +89,11 @@ export type BattleResult = {
   playerHpBefore: number
   playerHpAfter: number
   trophies: { id: string; name: string }[]
+  /** No Mercy: this exchange was SKYNET intercepting one of Claude's edits. */
+  intercept?: boolean
+  file?: string | null
+  defeat?: boolean
+  passed?: number
 }
 
 export type BattleAnim = { kind: 'enemyHit' | 'playerHit' | 'dodge'; frame: number }

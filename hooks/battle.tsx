@@ -9,7 +9,6 @@ import type { EngineInterface, On } from 'claude-code'
 import type { BattleQuestion, BattleResult, BattleView, BattleAnim } from '../types'
 import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
-import { setNoMercy } from './nomercy'
 
 type Engine = EngineInterface
 
@@ -27,7 +26,7 @@ const anim = atom({ plugin: 'diffdojo', key: 'battleAnim' } as const, null, { sh
 const intro = atom({ plugin: 'diffdojo', key: 'battleIntro' } as const, -1)
 const tick = atom({ plugin: 'diffdojo', key: 'battleTick' } as const, 0)
 const busy = atom({ plugin: 'diffdojo', key: 'battleBusy' } as const, false)
-// The same value hooks/nomercy.tsx owns, and whether SKYNET's screen is showing.
+// Whether a No Mercy fight is on (hooks/nomercy.tsx gates Claude's edits on it), and whether SKYNET's screen is showing.
 const noMercy = atom({ plugin: 'diffdojo', key: 'noMercy' } as const, false)
 const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, false)
 
@@ -47,6 +46,20 @@ async function cli($: Engine, args: string[]): Promise<Api> {
   } catch (err) {
     $.ui.log(`diffdojo battle: ${String(err)}`, { to: 'debug' })
     return { error: String(err) }
+  }
+}
+
+/** The fight as the CLI last reported it; also arms or disarms SKYNET's ability. */
+async function setScene($: Engine, v: BattleView | null) {
+  await update($, scene, () => v)
+  await track($, v)
+}
+
+async function track($: Engine, v: BattleView | null) {
+  const armed = !!v && v.mode === 'nomercy' && v.phase === 'fight'
+  if ((await read($, noMercy)) !== armed) {
+    await update($, noMercy, () => armed)
+    $.ui.status(armed ? 'DiffDojo: NO MERCY · SKYNET intercepts every edit Claude makes' : undefined)
   }
 }
 
@@ -78,7 +91,7 @@ async function loadQuestion($: Engine) {
     $.ui.toast(`DiffDojo: ${r.error}`)
     return
   }
-  if (r.state) await update($, scene, () => r.state as BattleView)
+  if (r.state) await setScene($, r.state as BattleView)
   await update($, question, () => (r.question as BattleQuestion) ?? null)
 }
 
@@ -87,7 +100,7 @@ async function sync($: Engine) {
   if (r.battle !== undefined) await update($, battleOn, () => r.battle !== false)
   if (r.battleAllowed !== undefined) await update($, battleAllowed, () => r.battleAllowed !== false)
   if (!r.state) return
-  await update($, scene, () => r.state as BattleView)
+  await setScene($, r.state as BattleView)
   if (r.state.phase === 'fight' && !(await read($, question)) && !(await read($, outcome)) && (await read($, intro)) < 0) await startIntro($)
 }
 
@@ -119,12 +132,52 @@ export async function battleAutoStart($: Engine) {
   return (await read($, battleOn)) && (await read($, battleAllowed))
 }
 
+/**
+ * SKYNET's ability landed: Claude's edit was intercepted and answered
+ * (hooks/nomercy.tsx). Shown as an exchange; a wrong answer ends the fight.
+ */
+export async function showIntercept($: Engine, hit: BattleResult & { state: BattleView }, prompt: string) {
+  await update($, outcome, () => ({ ...hit, picked: '', prompt }))
+  await update($, after, () => hit.state)
+  await track($, hit.state)
+  await update($, intro, () => -1)
+  await update($, anim, () => ({ kind: hit.correct ? 'enemyHit' : 'playerHit', frame: 0 }) as BattleAnim)
+  frames($)
+}
+
+/** Claude finished the prompt with every edit answered: SKYNET falls. */
+export async function showTurnEnd($: Engine, state: BattleView) {
+  await update($, outcome, () => null)
+  await update($, anim, () => null)
+  await update($, question, () => null)
+  await setScene($, state)
+}
+
+/** SKYNET's screen with its warning (the menu's No Mercy, and /nomercy). */
+export async function showSkynet($: Engine) {
+  const s = await read($, scene)
+  if (s && s.mode && s.phase !== 'menu') await toMenu($)
+  await update($, skynetView, () => true)
+}
+
+/** Start a fight in `mode` (the menu, and /nomercy for SKYNET). */
+export async function startFight($: Engine, mode: string) {
+  await update($, skynetView, () => false)
+  await choose($, mode)
+}
+
+/** End the fight and go back to the menu (RUN, /battle menu, /nomercy off). */
+export async function endFight($: Engine) {
+  await update($, skynetView, () => false)
+  await toMenu($)
+}
+
 async function choose($: Engine, mode: string) {
   const r = await cli($, ['battle-start', mode])
   if (r.error || !r.state) return $.ui.toast(`DiffDojo: could not start the battle${r.error ? `: ${r.error}` : ''}`)
   await update($, outcome, () => null)
   await update($, question, () => null)
-  await update($, scene, () => r.state as BattleView)
+  await setScene($, r.state as BattleView)
   await startIntro($)
 }
 
@@ -135,7 +188,8 @@ async function endIntro($: Engine) {
     return
   }
   await update($, intro, () => -1)
-  await loadQuestion($)
+  // SKYNET asks nothing between edits: it waits for Claude's next edit.
+  if (!(await read($, scene))?.noHealth) await loadQuestion($)
 }
 
 async function attack($: Engine, key: string) {
@@ -148,6 +202,7 @@ async function attack($: Engine, key: string) {
     if (r.error) return $.ui.toast(`DiffDojo: ${r.error}`)
     await update($, outcome, () => ({ ...(r as BattleResult), picked: key, prompt: q.prompt }))
     await update($, after, () => r.state as BattleView)
+    await track($, r.state as BattleView)
     await update($, anim, () => ({ kind: r.correct ? 'enemyHit' : r.enemyMissed ? 'dodge' : 'playerHit', frame: 0 }) as BattleAnim)
     frames($)
     for (const t of r.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 9000 })
@@ -162,8 +217,8 @@ async function proceed($: Engine) {
   await update($, outcome, () => null)
   await update($, question, () => null)
   await update($, anim, () => null)
-  if (next) await update($, scene, () => next)
-  if (!next || next.phase !== 'fight') return
+  if (next) await setScene($, next)
+  if (!next || next.phase !== 'fight' || next.noHealth) return
   if (res && res.enemyDefeated) await startIntro($) // a new enemy slides in
   else await loadQuestion($)
 }
@@ -171,7 +226,7 @@ async function proceed($: Engine) {
 async function again($: Engine) {
   const r = await cli($, ['battle-resume'])
   if (r.error || !r.state) return $.ui.toast(`DiffDojo: could not restart the battle${r.error ? `: ${r.error}` : ''}`)
-  await update($, scene, () => r.state as BattleView)
+  await setScene($, r.state as BattleView)
   await update($, outcome, () => null)
   await startIntro($)
 }
@@ -179,7 +234,7 @@ async function again($: Engine) {
 async function toMenu($: Engine) {
   const r = await cli($, ['battle-quit'])
   if (r.error || !r.state) return $.ui.toast(`DiffDojo: ${r.error || 'could not return to the menu'}`)
-  await update($, scene, () => r.state as BattleView)
+  await setScene($, r.state as BattleView)
   await update($, outcome, () => null)
   await update($, question, () => null)
   await update($, intro, () => -1)
@@ -214,10 +269,7 @@ export function registerBattle(on: On) {
       if (arg === 'off') await $.ui.close({ id: BATTLE_PANE })
       return { text: arg === 'on' ? 'Battle mode on: fights start while Claude works.' : 'Battle mode off: questions show in the plain box above the prompt.' }
     }
-    if (arg === 'menu') {
-      await update($, skynetView, () => false)
-      await toMenu($)
-    }
+    if (arg === 'menu') await endFight($)
     await openBattle($, true)
     return { text: 'DiffDojo Battle opened. Up/down and Enter to fight, Esc to return to the prompt.' }
   })
@@ -256,9 +308,8 @@ export function registerBattle(on: On) {
     const rule = <Text>{'═'.repeat(W)}</Text>
     const rowsOf = (rows: BoxRow[]) => draw(box(rows, W, t, false, 0).slice(1, -1))
 
-    // ---- No Mercy: SKYNET's screen, where the mode is switched on and off
+    // ---- No Mercy: SKYNET's screen, with the warning, before the fight starts
     if ((await read($, skynetView)) && (!s || !s.mode || s.phase === 'menu')) {
-      const armed = await read($, noMercy)
       return (
         <Box flexDirection="column">
           {draw([plain('', W), plain('   N O   M E R C Y', W, PALETTE.skynet, true), plain('', W)])}
@@ -267,10 +318,8 @@ export function registerBattle(on: On) {
           {rowsOf(
             wrap(
               [
-                armed
-                  ? 'SKYNET is guarding your files. Every edit Claude makes waits for your answer to one question about it. Answer right and the edit goes through. Answer wrong and SKYNET rejects it and Claude stops.'
-                  : 'SKYNET guards your files: once No Mercy is on, every edit Claude makes waits for your answer to one question about it. Answer right and the edit goes through. Answer wrong and SKYNET rejects it and Claude stops.',
-                armed ? 'No Mercy: ON' : 'No Mercy: OFF',
+                "SKYNET guards your files. While you fight it, every edit Claude makes waits for your answer to one question about it. Answer right and the edit goes through. Answer wrong and SKYNET rejects it and Claude stops.",
+                'Between edits it attacks like any enemy. RUN, a win or a loss ends the fight, and Claude edits freely again.',
               ],
               W - 6,
             ).map(text => ({ text })),
@@ -279,15 +328,10 @@ export function registerBattle(on: On) {
             key="skynet"
             autoFocus
             options={[
-              { value: 'toggle', label: armed ? 'Turn No Mercy off' : 'Turn No Mercy on: face SKYNET' },
+              { value: 'fight', label: 'Fight SKYNET' },
               { value: 'menu', label: 'Back to the menu' },
             ]}
-            onSelect={async v => {
-              if (v === 'toggle') {
-                const text = await setNoMercy($, !armed)
-                $.ui.toast(text.split('. ')[0] + '.')
-              } else await update($, skynetView, () => false)
-            }}
+            onSelect={v => (v === 'fight' ? startFight($, NO_MERCY) : update($, skynetView, () => false))}
           />
           {rule}
           <Text dimColor>up/down choose · Enter select · Esc back to the prompt</Text>
@@ -297,7 +341,6 @@ export function registerBattle(on: On) {
 
     // ---- menu
     if (!s || !s.mode || s.phase === 'menu') {
-      const mercy = await read($, noMercy)
       const best = (s && s.best) || {}
       const wins = (s && s.wins) || {}
       return (
@@ -314,7 +357,7 @@ export function registerBattle(on: On) {
                 value,
                 label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${wins[value] ? `  cleared x${wins[value]}` : ''}`,
               })),
-              { value: NO_MERCY, label: `${'No Mercy'.padEnd(13)} SKYNET guards every edit Claude makes  [${mercy ? 'ON' : 'OFF'}]` },
+              { value: NO_MERCY, label: `${'No Mercy'.padEnd(13)} SKYNET: answer for every edit Claude makes${wins[NO_MERCY] ? `  cleared x${wins[NO_MERCY]}` : ''}` },
             ]}
             onSelect={value => (value === NO_MERCY ? update($, skynetView, () => true) : choose($, value))}
           />
@@ -327,18 +370,25 @@ export function registerBattle(on: On) {
     // ---- game over / victory
     if (s.phase === 'gameover' || s.phase === 'victory') {
       const won = s.phase === 'victory'
-      const id = won && s.mode === 'professional' ? 'evil' : 'player'
+      const id = s.noHealth ? (won ? 'player' : 'skynet') : won && s.mode === 'professional' ? 'evil' : 'player'
+      const message = s.noHealth
+        ? won
+          ? `Claude finished your prompt, and you answered for all ${s.passed} of its edits. SKYNET falls!`
+          : "SKYNET wins. Claude's edit was rejected and Claude stopped. Look at what it was doing, then face SKYNET again."
+        : won
+          ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : ''}`
+          : 'Out of lives. Back to the first enemy with full health and 3 lives.'
       return (
         <Box flexDirection="column">
           {draw([plain('', W), plain(won ? '        V I C T O R Y' : '        G A M E   O V E R', W, won ? PALETTE.ink : PALETTE.hurt, true), plain('', W)])}
           {draw(spriteLines(id, t).map(l => pad(join([], l, 8), W)))}
           {rule}
-          {rowsOf([{ text: won ? `You cleared ${s.modeLabel}!${s.mode === 'professional' ? ' Evil Claude is defeated.' : ''}` : 'Out of lives. Back to the first enemy with full health and 3 lives.' }])}
+          {rowsOf(wrap([message], W - 6).map(text => ({ text })))}
           <Select
             key="end"
             autoFocus
             options={[
-              { value: 'again', label: won ? 'Fight this ladder again' : 'Try again' },
+              { value: 'again', label: s.noHealth ? 'Face SKYNET again (next prompt)' : won ? 'Fight this ladder again' : 'Try again' },
               { value: 'menu', label: 'Choose another mode' },
             ]}
             onSelect={v => (v === 'again' ? again($) : toMenu($))}
@@ -352,10 +402,10 @@ export function registerBattle(on: On) {
     const enemy = s.enemy!
     const progress = a ? a.frame / ANIM_FRAMES : 1
     const lerp = (x: number, y: number) => Math.round(x + (y - x) * Math.min(1, progress))
-    const enemyHp = res ? (a?.kind === 'enemyHit' ? lerp(res.enemyHpBefore, res.enemyHpAfter) : res.enemyHpAfter) : enemy.hp
-    const playerHp = res ? (a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter) : res.playerHpAfter) : s.player.hp
+    const enemyHp = res && !res.intercept ? (a?.kind === 'enemyHit' ? lerp(res.enemyHpBefore, res.enemyHpAfter) : res.enemyHpAfter) : enemy.hp
+    const playerHp = res && !res.intercept ? (a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter) : res.playerHpAfter) : s.player.hp
     const sliding = i >= 0
-    const lost = res ? (a?.kind === 'enemyHit' ? res.enemyHpBefore - res.enemyHpAfter : res.playerHpBefore - res.playerHpAfter) : 0
+    const lost = res && !res.intercept ? (a?.kind === 'enemyHit' ? res.enemyHpBefore - res.enemyHpAfter : res.playerHpBefore - res.playerHpAfter) : 0
     const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp, lost })
 
     let rows: BoxRow[] = []
@@ -365,7 +415,10 @@ export function registerBattle(on: On) {
       control = <Select key="intro" autoFocus options={[{ value: 'go', label: i >= INTRO_STEPS ? (t % 2 ? '▼' : ' ') : '...' }]} onSelect={() => endIntro($)} />
     } else if (res) {
       const lines: string[] = []
-      if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage} tokens!${res.xp ? ` +${res.xp} XP` : ''}`)
+      if (res.intercept) lines.push(`${res.enemyName} intercepted Claude's edit${res.file ? ` to ${res.file}` : ''}!`)
+      if (res.intercept && res.correct) lines.push(`Correct! The edit goes through. Edits passed: ${res.passed ?? 0}.${res.xp ? ` +${res.xp} XP` : ''}`)
+      else if (res.intercept) lines.push(`Wrong! ${res.enemyName} rejects the edit and stops Claude. You lose.${res.correctKey ? ` (Claude wrote: ${res.correctKey})` : ''}`)
+      else if (res.correct) lines.push(`Correct! ${res.playerName || 'You'} hits ${res.enemyName} for ${res.damage} tokens!${res.xp ? ` +${res.xp} XP` : ''}`)
       else if (res.enemyMissed) lines.push(`Wrong, it was ${res.correctKey}... but ${res.enemyName} missed!`)
       else lines.push(`Wrong, it was ${res.correctKey}! ${res.enemyName} hits ${res.playerName || 'You'} for ${res.enemyDamage} tokens!`)
       if (res.enemyDefeated && !res.victory) lines.push(`${res.enemyName} ran out of tokens! ${res.playerName || 'You'}'s tokens are restored.`)
@@ -388,12 +441,14 @@ export function registerBattle(on: On) {
             ...Object.entries(q.choices).map(([k, val]) => ({ value: k, label: `${k}) ${val}` })),
             { value: RUN, label: 'RUN: end this battle and go back to the menu' },
           ]}
-          onSelect={value => (value === RUN ? toMenu($) : attack($, value))}
+          onSelect={value => (value === RUN ? endFight($) : attack($, value))}
         />
       )
     } else {
-      rows = [{ text: `${enemy.name} is thinking${'.'.repeat((t % 3) + 1)}` }]
-      control = <Select key="run" options={[{ value: RUN, label: 'RUN: end this battle and go back to the menu' }]} onSelect={() => toMenu($)} />
+      rows = s.noHealth
+        ? wrap([`${enemy.name} is watching Claude${'.'.repeat((t % 3) + 1)} Every edit Claude makes for your prompt waits for your answer. Survive them all and SKYNET falls when Claude is done.`], W - 6).map(text => ({ text }))
+        : [{ text: `${enemy.name} is thinking${'.'.repeat((t % 3) + 1)}` }]
+      control = <Select key="run" options={[{ value: RUN, label: 'RUN: end this battle and go back to the menu' }]} onSelect={() => endFight($)} />
     }
 
     return (
