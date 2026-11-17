@@ -1,8 +1,8 @@
 'use strict';
 // DiffDojo Battle: a turn-based quiz fight in the style of classic handheld
 // RPG battles (original characters). An enemy asks a question with four
-// answers; a correct answer damages it, a wrong one lets it hit you. Your HP
-// refills for each new enemy; lose 3 lives and the ladder starts over.
+// answers; a correct answer burns its tokens, a wrong one lets it burn yours (health is a token budget). Your tokens
+// refill for each new enemy; lose 3 lives and the ladder starts over.
 // Modes: easy, medium, hard, professional (final boss: Evil Claude), endless.
 // State is global and kept in ~/.diffdojo/battle.json.
 

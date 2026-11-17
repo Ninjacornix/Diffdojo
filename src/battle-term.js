@@ -94,7 +94,15 @@ function game(scene, { db, repoId, root, cfg, width, rnd = Math.random }) {
       else nextQuestion();
     } else if (g.phase === 'question') {
       const keys = Object.keys(g.question.choices);
-      const r = await battle.answer(db, keys[Math.min(g.cursor, keys.length - 1)], { cfg, root, rnd });
+      if (g.cursor >= keys.length) {
+        // RUN: end this battle and go back to the menu.
+        g.view = battle.view(battle.quit());
+        g.phase = 'menu';
+        g.cursor = 0;
+        g.question = null;
+        return;
+      }
+      const r = await battle.answer(db, keys[g.cursor], { cfg, root, rnd });
       if (r.error) {
         g.message = r.error;
         return;
@@ -166,7 +174,8 @@ function game(scene, { db, repoId, root, cfg, width, rnd = Math.random }) {
     const lerp = (a, b) => Math.round(a + (b - a) * Math.min(1, p));
     const enemyHp = r ? (g.anim && g.anim.kind === 'enemyHit' ? lerp(r.enemyHpBefore, r.enemyHpAfter) : r.enemyHpAfter) : v.enemy.hp;
     const playerHp = r ? (g.anim && g.anim.kind === 'playerHit' ? lerp(r.playerHpBefore, r.playerHpAfter) : r.playerHpAfter) : v.player.hp;
-    const field = scene.battlefield({ view: v, width: W, tick: t, intro: g.phase === 'intro' ? g.intro : scene.INTRO_STEPS, anim: g.anim, enemyHp, playerHp });
+    const lost = r ? (g.anim && g.anim.kind === 'enemyHit' ? r.enemyHpBefore - r.enemyHpAfter : r.playerHpBefore - r.playerHpAfter) : 0;
+    const field = scene.battlefield({ view: v, width: W, tick: t, intro: g.phase === 'intro' ? g.intro : scene.INTRO_STEPS, anim: g.anim, enemyHp, playerHp, lost });
     let rows;
     if (g.phase === 'intro') {
       const name = v.enemy.name;
@@ -178,19 +187,20 @@ function game(scene, { db, repoId, root, cfg, width, rnd = Math.random }) {
       rows = scene.wrap([`${v.enemy.name} asks: ${q.prompt}`], W - 6).map((text) => ({ text }));
       if (q.code && q.code.split('\n').length <= 10) for (const c of q.code.split('\n')) rows.push({ text: '  ' + c, dim: true });
       const keys = Object.keys(q.choices);
-      g.cursor = Math.min(g.cursor, keys.length - 1);
+      g.cursor = Math.min(g.cursor, keys.length); // the last row is RUN
       keys.forEach((k, i) => scene.wrap([`${k}) ${q.choices[k]}`], W - 8).forEach((text, j) => rows.push({ text: j ? '   ' + text : text, selected: i === g.cursor && j === 0 })));
+      rows.push({ text: 'RUN: end this battle and go back to the menu', selected: g.cursor === keys.length });
       if (g.message) rows.push({ text: g.message, dim: true });
       return field.concat(scene.box(rows, W, t, false));
     }
     // result
     const lines = [];
-    if (r.correct) lines.push(`Correct! ${r.playerName || 'You'} hits ${r.enemyName} for ${r.damage}!${r.xp ? ` +${r.xp} XP` : ''}`);
+    if (r.correct) lines.push(`Correct! ${r.playerName || 'You'} hits ${r.enemyName} for ${r.damage} tokens!${r.xp ? ` +${r.xp} XP` : ''}`);
     else if (r.enemyMissed) lines.push(`Wrong, it was ${r.correctKey}... but ${r.enemyName} missed!`);
-    else lines.push(`Wrong, it was ${r.correctKey}! ${r.enemyName} hits ${r.playerName || 'You'} for ${r.enemyDamage}!`);
-    if (r.enemyDefeated && !r.victory) lines.push(`${r.enemyName} fainted! ${r.playerName || 'You'}'s HP is restored.`);
+    else lines.push(`Wrong, it was ${r.correctKey}! ${r.enemyName} hits ${r.playerName || 'You'} for ${r.enemyDamage} tokens!`);
+    if (r.enemyDefeated && !r.victory) lines.push(`${r.enemyName} ran out of tokens! ${r.playerName || 'You'}'s tokens are restored.`);
     if (r.victory) lines.push(`${r.enemyName} is defeated! You cleared the ladder!`);
-    if (r.lifeLost && !r.gameOver) lines.push(`${r.playerName || 'You'} fainted! One life lost, HP restored.`);
+    if (r.lifeLost && !r.gameOver) lines.push(`${r.playerName || 'You'} ran out of tokens! One life lost, tokens restored.`);
     if (r.gameOver) lines.push('No lives left...');
     for (const t2 of r.trophies || []) lines.push(`Trophy: ${t2.name}`);
     rows = scene.wrap(lines, W - 6).map((text) => ({ text }));

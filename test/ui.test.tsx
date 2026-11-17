@@ -152,6 +152,7 @@ function fakeBattle(on: any) {
     if (args[0] === 'battle-state') body = { ...body, battle: true, state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
     if (args[0] === 'battle-start') body = { state: FIGHT }
     if (args[0] === 'battle-question') body = { question: BQ, state: FIGHT }
+    if (args[0] === 'battle-quit') body = { state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
     if (args[0] === 'battle-answer')
       body = {
         correct: args[1] === 'b', correctKey: 'b', xp: 5, explanation: 'BFS explores by distance.', enemyName: 'TYPO SPRITE', playerName: 'MILAN',
@@ -390,4 +391,35 @@ test('the first session says once that Claude writes the questions, and how to k
   await boot($, on)
   expect(logs.some(l => l.includes('claude-haiku-5-5') && l.includes('model.enabled false'))).toBe(true)
   expect(calls.some(c => c[0] === 'model-notice-ack')).toBe(true)
+})
+
+test('battle: RUN ends the fight and goes back to the menu', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await ui.select({ key: 'mode', value: 'easy' })
+  await ui.select({ key: 'intro', value: 'go' })
+  await ui.select({ key: 'intro', value: 'go' })
+  expect(await ui.find({ key: 'q-11' })).toBeTruthy()
+  await ui.select({ key: 'q-11', value: '__run' })
+  expect(calls.some(c => c[0] === 'battle-quit')).toBe(true)
+  expect(calls.some(c => c[0] === 'battle-answer')).toBe(false)
+  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('battle menu: No Mercy opens SKYNET, which turns the mode on and off', async ($, on) => {
+  const calls = fakeBattle(on)
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  expect(await ui.find({ type: 'Text', text: /N O   M E R C Y/ })).toBeFalsy()
+  await ui.select({ key: 'mode', value: 'nomercy' })
+  expect(await ui.find({ type: 'Text', text: /N O   M E R C Y/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /No Mercy: OFF/ })).toBeTruthy()
+  await ui.select({ key: 'skynet', value: 'toggle' })
+  expect(calls.some(c => c.join(' ').includes('config set noMercy true --global'))).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /No Mercy: ON/ })).toBeTruthy()
+  await ui.select({ key: 'skynet', value: 'menu' })
+  expect(await ui.find({ key: 'mode' })).toBeTruthy()
+  await ui.unmount()
 })

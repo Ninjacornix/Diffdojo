@@ -87,7 +87,15 @@ function snapshot(root) {
   const tmp = path.join(os.tmpdir(), `diffdojo-index-${process.pid}-${Date.now()}`);
   try {
     const real = path.join(gitDir(root), 'index');
-    if (fs.existsSync(real)) fs.copyFileSync(real, tmp);
+    if (fs.existsSync(real)) {
+      fs.copyFileSync(real, tmp);
+      // Keep the index's own timestamps: git re-reads files changed in the same
+      // second the index was written ("racy git") only when the index file's
+      // mtime says so. A fresh copy would make them look clean, and a quick
+      // same-size edit (x = 1 -> x = 2) would be missed on whole-second filesystems.
+      const st = fs.statSync(real);
+      fs.utimesSync(tmp, st.atime, st.mtime);
+    }
     const env = { GIT_INDEX_FILE: tmp };
     const add = git(root, ['add', '-A', '--', '.'], { env, timeout: 120000 });
     if (add.code !== 0) return null;

@@ -20,6 +20,7 @@ export const PALETTE = {
   hurt: '#e0533d', // a hit flashes red
   low: '#d9a13b', // HP getting low
   boss: '#d97757', // Evil Claude's orange
+  skynet: '#e0533d', // SKYNET, No Mercy's boss: red
 }
 
 // ---------------------------------------------------------------- sprites
@@ -160,6 +161,34 @@ const ART: Record<string, string[]> = {
   ],
 }
 
+// SKYNET, No Mercy's boss: a server rack with one great eye, guarding your files.
+const SKYNET: string[][] = [
+  [
+    R`   ___________________   `,
+    R`  |  _______________  |  `,
+    R`  | |    _______    | |  `,
+    R`  | |   /  ___  \   | |  `,
+    R`  | |  |  (( ))  |  | |  `,
+    R`  | |   \_______/   | |  `,
+    R`  | |_______________| |  `,
+    R`  |  ::::  :::  ::::  |  `,
+    R`  |  [##]  [#]  [##]  |  `,
+    R`  |___________________|  `,
+  ],
+  [
+    R`   ___________________   `,
+    R`  |  _______________  |  `,
+    R`  | |    _______    | |  `,
+    R`  | |   /  ___  \   | |  `,
+    R`  | |  |  ( O )  |  | |  `,
+    R`  | |   \_______/   | |  `,
+    R`  | |_______________| |  `,
+    R`  |  ::::  :::  ::::  |  `,
+    R`  |  [##]  [ ]  [##]  |  `,
+    R`  |___________________|  `,
+  ],
+]
+
 // Evil Claude: an angry starburst; its rays swing between two angles.
 const EVIL: string[][] = [
   [
@@ -189,6 +218,7 @@ const EVIL: string[][] = [
 /** The text rows of a character's idle frame (0 or 1). */
 export function art(id: string, frame: number): string[] {
   if (id === 'evil') return EVIL[frame % 2]
+  if (id === 'skynet') return SKYNET[frame % 2]
   const src = ART[id] || ART.typo
   const w = Math.max(...src.map(r => r.length))
   const rows = src.map(r => r.padEnd(w))
@@ -197,7 +227,7 @@ export function art(id: string, frame: number): string[] {
 }
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
-  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : PALETTE.ink
+  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : PALETTE.ink
   return art(id, frame).map(t => [{ t, c, b: !!c }])
 }
 
@@ -237,10 +267,63 @@ export function join(left: Line, right: Line, at: number): Line {
   return pad(left, at).concat(right)
 }
 
+/** Health is a token budget: the bar shows the tokens a fighter has left. */
+export const BAR_LABEL = 'TOKENS'
+
 export function hpBar(hp: number, max: number, cells = 16): Line {
   const n = Math.max(0, Math.min(cells, Math.round((hp / Math.max(1, max)) * cells)))
   const c = hp / max > 0.5 ? PALETTE.ink : hp / max > 0.2 ? PALETTE.low : PALETTE.hurt
-  return [seg('HP:', PALETTE.ink, true), seg('▐'), seg('█'.repeat(n), c), seg('░'.repeat(cells - n), PALETTE.light), seg('▌')]
+  return [seg(BAR_LABEL, PALETTE.ink, true), seg('▐'), seg('█'.repeat(n), c), seg('░'.repeat(cells - n), PALETTE.light), seg('▌')]
+}
+
+// What falls out of a fighter's bar when it is hit: tokens, as a tokenizer would cut them.
+export const SPILL = ['▁def', 'await', '##ing', '</s>', 'Ġreturn', 'self', '{', '};', '=>', '::', 'null', 'ion', '▁the', 'std', '0x1F', '##er', 'Ġif', 'tok', '\\n', 'import', '▁func', '++', 'err', '<|eot|>']
+
+function hash(text: string): number {
+  let h = 2166136261
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+  return h >>> 0
+}
+
+/**
+ * Two to five words per hit (more for a bigger hit), side by side without
+ * overlapping inside `room` columns, each with a small random delay.
+ */
+export function spillWords(seed: string, lost: number, room = 24): { word: string; dx: number; delay: number }[] {
+  const n = Math.max(2, Math.min(5, Math.round(lost / 10)))
+  const out: { word: string; dx: number; delay: number }[] = []
+  let h = hash(seed)
+  let x = 0
+  for (let i = 0; i < n; i++) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0
+    const word = SPILL[h % SPILL.length]
+    x += i === 0 ? (h >>> 8) % 2 : 1 + ((h >>> 8) % 2)
+    if (x + [...word].length > room) break
+    out.push({ word, dx: x, delay: (h >>> 12) % 3 })
+    x += [...word].length
+  }
+  return out
+}
+
+/** Characters from `from` on (by columns). */
+function tail(line: Line, from: number): Line {
+  const out: Line = []
+  let n = 0
+  for (const s of line) {
+    const chars = [...s.t]
+    const end = n + chars.length
+    if (end > from) out.push({ ...s, t: chars.slice(Math.max(0, from - n)).join('') })
+    n = end
+  }
+  return out
+}
+
+/** Write `text` over `line` at column `at`, keeping the line's width. */
+function overlay(line: Line, at: number, text: string, c: string | null): Line {
+  const w = width(line)
+  if (at >= w) return line
+  const t = [...text].slice(0, w - at).join('')
+  return clip(pad(line, at), at).concat([seg(t, c, true)], tail(line, at + [...t].length))
 }
 
 function balls(full: number, total: number): string {
@@ -271,6 +354,8 @@ export type SceneInput = {
   anim: { kind: 'enemyHit' | 'playerHit' | 'dodge'; frame: number } | null
   enemyHp: number
   playerHp: number
+  /** Tokens the hit fighter lost: how many words spill out of its bar. */
+  lost?: number
 }
 
 export const INTRO_STEPS = 8
@@ -330,9 +415,9 @@ export function battlefield(s: SceneInput): Line[] {
   const pStatus: Line[] = inPlace
     ? [
         [seg(v.player.name || 'YOU', PALETTE.ink, true)],
-        [seg(`  ${balls(v.lives, v.maxLives)}  lives`, PALETTE.ink)],
+        [seg(`  ${balls(v.lives, v.maxLives)}  `, PALETTE.ink), seg(`${String(s.playerHp).padStart(3)}/${v.player.maxHp} tokens`, PALETTE.ink, true)],
         [...hpBar(s.playerHp, v.player.maxHp)],
-        [seg(`      ${String(s.playerHp).padStart(3)}/ ${v.player.maxHp}`, PALETTE.ink, true)],
+        [seg('')], // tokens fall through here when you are hit
         [seg('◀' + '─'.repeat(26) + '┘', PALETTE.ink)],
       ]
     : [[seg('')], [seg('')], [seg(`${balls(v.lives, v.maxLives)}       │`, PALETTE.ink)], [seg('◀' + '─'.repeat(26) + '┘', PALETTE.ink)]]
@@ -342,6 +427,23 @@ export function battlefield(s: SceneInput): Line[] {
     const st = pStatus[i - (rows - pStatus.length)] || []
     const visible = pAt < 0 ? [] : sp
     lines.push(pad(join(join([], visible, pAt), st, sx), W))
+  }
+
+  // ---- tokens spilling out of the bar of whoever was hit, falling a row every few frames
+  const kind = s.anim?.kind
+  if (inPlace && (kind === 'enemyHit' || kind === 'playerHit') && s.anim!.frame < ANIM_FRAMES) {
+    const barRow = kind === 'enemyHit' ? 2 : top + 1 + (rows - pStatus.length) + 2
+    const barCol = kind === 'enemyHit' ? 8 : sx + 2 // the enemy's start clear of its stage balls
+    const below = kind === 'enemyHit' ? 3 : 2 // rows under the bar the words can fall through
+    const seed = `${kind}|${v.stage}|${v.wave}|${v.lives}|${e ? e.hp : 0}|${v.player.hp}`
+    for (const w of spillWords(seed, s.lost ?? 30, kind === 'enemyHit' ? 20 : 25)) {
+      const f = s.anim!.frame - w.delay
+      if (f < 0) continue
+      const drop = 1 + Math.floor(f / 3)
+      if (drop > below) continue
+      const row = barRow + drop
+      if (row < lines.length) lines[row] = overlay(lines[row], barCol + w.dx, w.word, drop === 1 ? PALETTE.hurt : PALETTE.mid)
+    }
   }
   return lines
 }

@@ -149,6 +149,52 @@ test('the terminal game plays a full exchange: intro, question, hit, next enemy'
   for (const line of G.draw()) assert.strictEqual(line.reduce((n, s) => n + [...s.t].length, 0), 72, 'every row fills the screen width');
 });
 
+test('health is a token budget, and a hit spills tokens out of the bar', async () => {
+  const scene = await require('../src/battle-term').loadScene();
+  const view = { mode: 'easy', modeLabel: 'Easy', stage: 0, stages: 3, wave: 1, lives: 3, maxLives: 3, player: { name: 'MILAN', hp: 100, maxHp: 100 }, enemy: { id: 'typo', name: 'TYPO SPRITE', level: 3, hp: 60, maxHp: 60, boss: false } };
+  const text = (lines) => lines.map((l) => l.map((x) => x.t).join(''));
+  const calm = text(scene.battlefield({ view, width: 72, tick: 0, intro: scene.INTRO_STEPS, anim: null, enemyHp: 60, playerHp: 100 }));
+  assert.ok(calm.some((l) => l.includes('TOKENS▐')), 'bars are token bars');
+  assert.ok(!calm.some((l) => /\bHP\b/.test(l)), 'no HP left on screen');
+  assert.ok(calm.some((l) => l.includes('100/100 tokens')));
+
+  // Words never overlap, and more tokens lost means more words (2 to 5).
+  for (const lost of [5, 15, 35, 50, 90]) {
+    const ws = scene.spillWords(`seed${lost}`, lost, 25);
+    assert.ok(ws.length >= 2 && ws.length <= 5, `${lost}: ${ws.length} words`);
+    for (let i = 1; i < ws.length; i++) assert.ok(ws[i].dx >= ws[i - 1].dx + [...ws[i - 1].word].length + 1, 'a gap between words');
+    assert.ok(ws.every((w) => w.dx + [...w.word].length <= 25), 'inside the room given');
+  }
+
+  for (const kind of ['enemyHit', 'playerHit']) {
+    const seen = new Set();
+    for (let frame = 0; frame < scene.ANIM_FRAMES; frame++) {
+      const lines = text(scene.battlefield({ view, width: 72, tick: 0, intro: scene.INTRO_STEPS, anim: { kind, frame }, enemyHp: kind === 'enemyHit' ? 25 : 60, playerHp: kind === 'playerHit' ? 85 : 100, lost: 35 }));
+      for (const l of lines) assert.strictEqual([...l].length, 72, 'every row keeps the screen width');
+      for (const w of scene.SPILL) if (lines.some((l) => l.includes(w))) seen.add(w);
+      const status = lines.find((l) => l.includes('/100 tokens'));
+      assert.ok(status && status.includes('85/100 tokens') === (kind === 'playerHit'), 'the token count stays readable');
+    }
+    assert.ok(seen.size >= 2, `${kind}: tokens fall out (${[...seen].join(' ')})`);
+  }
+});
+
+test('the terminal game: RUN ends the battle and goes back to the menu', async () => {
+  const term = require('../src/battle-term');
+  const scene = await term.loadScene();
+  battle.start('easy');
+  const G = term.game(scene, { db, repoId: null, root: null, cfg, width: 72, rnd: never });
+  const text = () => G.draw().map((l) => l.map((s) => s.t).join('')).join('\n');
+  await G.press('enter');
+  await G.press('enter');
+  assert.match(text(), /RUN: end this battle/);
+  for (let i = 0; i < 6; i++) await G.press('down'); // past the answers, onto RUN
+  await G.press('enter');
+  assert.strictEqual(G.g.phase, 'menu');
+  assert.strictEqual(battle.load().mode, null, 'the battle is over');
+  assert.match(text(), /Choose|Easy/);
+});
+
 test('the demo makes a sandbox project with questions about a simulated Claude change', async () => {
   const os = require('os');
   const path = require('path');

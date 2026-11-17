@@ -95,6 +95,7 @@ declare module 'claude-code' {
       battleOn: boolean
       battleAllowed: boolean
       noMercy: boolean
+      skynetView: boolean
       battleScene: Shaped<BattleView | null>
       battleAfter: Shaped<BattleView | null>
       battleQuestion: Shaped<BattleQuestion | null>

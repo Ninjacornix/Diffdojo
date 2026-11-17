@@ -35,11 +35,22 @@ async function cli($: Engine, args: string[], stdin?: string): Promise<Record<st
   }
 }
 
+/** Turn No Mercy on or off (the /nomercy command and the battle menu); returns what to tell the person. */
+export async function setNoMercy($: Engine, want: boolean): Promise<string> {
+  await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'config', 'set', 'noMercy', want ? 'true' : 'false', '--global'])
+  await update($, noMercy, () => want)
+  $.ui.status(want ? `DiffDojo: NO MERCY · ${BOSS} is watching` : undefined)
+  return want
+    ? `No Mercy is on. ${BOSS} now guards your files: before each of Claude's edits it asks you a question about the change. Right: you beat it and the edit goes through. Wrong: ${BOSS} rejects the edit and Claude stops. /nomercy off to end it.`
+    : 'No Mercy is off: Claude\'s edits go through without a question.'
+}
+
 /** Called from the plugin's one session.start hook. */
 export async function noMercySessionStart($: Engine) {
   await $.command.register({ name: 'nomercy', description: 'DiffDojo No Mercy: answer a question about each of Claude\'s edits before it is applied (on | off)', argumentHint: '[on|off]' })
   const s = await cli($, ['status'])
   if (s.noMercy !== undefined) await update($, noMercy, () => !!s.noMercy)
+  if (s.noMercy) $.ui.status(`DiffDojo: NO MERCY · ${BOSS} is watching`)
 }
 
 export function registerNoMercy(on: On) {
@@ -51,14 +62,7 @@ export function registerNoMercy(on: On) {
   on('command.run', { command: 'nomercy' }, async ($, e) => {
     const arg = (e.args || '').trim().toLowerCase()
     const want = arg === 'on' ? true : arg === 'off' ? false : !(await read($, noMercy))
-    await $.process.run(['node', `${$.plugin.root}/bin/diffdojo`, 'config', 'set', 'noMercy', want ? 'true' : 'false', '--global'])
-    await update($, noMercy, () => want)
-    $.ui.status(want ? 'DiffDojo: NO MERCY' : undefined)
-    return {
-      text: want
-        ? `No Mercy is on. ${BOSS} now guards your files: before each of Claude's edits it asks you a question about the change. Right: you beat it and the edit goes through. Wrong: ${BOSS} rejects the edit and Claude stops. /nomercy off to end it.`
-        : 'No Mercy is off: Claude\'s edits go through without a question.',
-    }
+    return { text: await setNoMercy($, want) }
   })
 
   {
