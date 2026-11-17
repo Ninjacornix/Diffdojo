@@ -178,7 +178,7 @@ function fakeBattle(on: any) {
 
 /** Pick a fight from the menu: main screen, then the Fight or Special fights screen. */
 async function pick(ui: any, mode: string) {
-  await ui.select({ key: 'menu', value: ['nomercy', 'bughunter'].includes(mode) ? 'special' : 'ladders' })
+  await ui.select({ key: 'menu', value: ['nomercy', 'bughunter', 'rush'].includes(mode) ? 'special' : 'ladders' })
   await ui.select({ key: 'mode', value: mode })
 }
 
@@ -655,5 +655,55 @@ test('menu: Scores → Share shows the card first and publishes only on Publish'
   expect(calls.some(c => c[0] === 'share')).toBe(true)
   expect(toasts.some(t => t.includes('https://gist.github.com/me/abc123'))).toBe(true)
   expect(await ui.find({ type: 'Text', text: /Shared at https:\/\/gist\.github\.com\/me\/abc123/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---------------- Rush: THE CLOCK ----------------
+
+test('Rush: answers go straight to the next question against the clock, then TIME!', async ($, on) => {
+  const calls: string[][] = []
+  const RUSH = {
+    ...FIGHT, mode: 'rush', modeLabel: 'Rush', stages: 1, noHealth: true,
+    enemy: { id: 'clock', name: 'THE CLOCK', level: 60, hp: 1, maxHp: 1, boss: true, color: '#d9a13b' },
+  }
+  let score = 0
+  let answers = 0
+  const state = (phase = 'fight') => ({ ...RUSH, phase, rush: { endsAt: Date.now() + 40000, score, best: Math.max(score, 3) } })
+  on('process.run', (_: unknown, e: any) => {
+    const argv: string[] = e.argv ?? e[0] ?? []
+    const args = argv.slice(argv.indexOf('api') + 1)
+    calls.push(args)
+    let body: Record<string, unknown> = { enabled: true, queued: 0, header: '' }
+    if (args[0] === 'battle-state') body = { ...body, battle: true, state: { ...FIGHT, phase: 'menu', mode: null, enemy: null } }
+    if (args[0] === 'settings') body = { enabled: true, model: 'claude-haiku-5-5', effort: 'low', perHour: 30 }
+    if (args[0] === 'battle-start') body = { state: state() }
+    if (args[0] === 'battle-question') body = { question: { ...BQ, id: 20 + answers }, state: state() }
+    if (args[0] === 'battle-answer') {
+      answers++
+      const correct = args[1] === 'b'
+      if (correct) score++
+      body = answers < 2
+        ? { rush: true, correct, correctKey: 'b', score, xp: 5, trophies: [], state: state() }
+        : { rush: true, correct, correctKey: 'b', score, rushOver: true, best: 3, trophies: [{ id: 'rush-first', name: 'Against the Clock' }], state: state('gameover') }
+    }
+    return { value: { exitCode: 0, stdout: JSON.stringify(body) + '\n', stderr: '' } }
+  })
+  const toasts: string[] = []
+  await boot($, on, toasts)
+  const ui = await $.ui.mount({ ...BATTLE_PANE, surface: 'terminal' } as any)
+  await pick(ui, 'rush')
+  expect(calls.some(c => c[0] === 'battle-start' && c[1] === 'rush')).toBe(true)
+  await ui.select({ key: 'intro', value: 'go' })
+  await ui.select({ key: 'intro', value: 'go' })
+  expect(await ui.find({ type: 'Text', text: /TIME▐/ })).toBeTruthy()
+  await ui.select({ key: 'q-20', value: 'b' })
+  // No result screen: the next question is already there, with the verdict above it.
+  expect(await ui.find({ key: 'continue' })).toBeFalsy()
+  expect(await ui.find({ key: 'q-21' })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Correct! \+2s/ })).toBeTruthy()
+  await ui.select({ key: 'q-21', value: 'a' })
+  expect(await ui.find({ type: 'Text', text: /T I M E !/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /You got 1 right/ })).toBeTruthy()
+  expect(toasts.some(t => t.includes('Against the Clock'))).toBe(true)
   await ui.unmount()
 })

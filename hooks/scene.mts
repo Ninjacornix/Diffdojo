@@ -22,6 +22,7 @@ export const PALETTE = {
   boss: '#d97757', // Evil Claude's orange
   skynet: '#e0533d', // SKYNET, No Mercy's boss: red
   freellm: '#c94fd6', // FREE CHINESE LLM, Bug Hunter's boss
+  clock: '#d9a13b', // THE CLOCK, Rush
 }
 
 // ---------------------------------------------------------------- sprites
@@ -186,6 +187,32 @@ const FREELLM: string[][] = [
   ],
 ]
 
+// THE CLOCK, Rush: an alarm clock whose hands swing between two times.
+const CLOCK: string[][] = [
+  [
+    R`    _         _    `,
+    R`   (_)_______(_)   `,
+    R`   /  .  12 .  \   `,
+    R`  | 9    |    3 |  `,
+    R`  |      |__    |  `,
+    R`  | .         . |  `,
+    R`   \  .  6  .  /   `,
+    R`    '-._____.-'    `,
+    R`     /       \     `,
+  ],
+  [
+    R`    _         _    `,
+    R`   (_)_______(_)   `,
+    R`   /  .  12 .  \   `,
+    R`  | 9      /  3 |  `,
+    R`  |    __/      |  `,
+    R`  | .         . |  `,
+    R`   \  .  6  .  /   `,
+    R`    '-._____.-'    `,
+    R`     /       \     `,
+  ],
+]
+
 // SKYNET, No Mercy's boss: a server rack with one great eye, guarding your files.
 const SKYNET: string[][] = [
   [
@@ -244,6 +271,7 @@ const EVIL: string[][] = [
 export function art(id: string, frame: number): string[] {
   if (id === 'evil') return EVIL[frame % 2]
   if (id === 'skynet') return SKYNET[frame % 2]
+  if (id === 'clock') return CLOCK[frame % 2]
   if (id === 'freellm') return FREELLM[frame % 2].map(r => r.replace(/@/g, 'o'))
   const src = ART[id] || ART.typo
   const w = Math.max(...src.map(r => r.length))
@@ -253,7 +281,7 @@ export function art(id: string, frame: number): string[] {
 }
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
-  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : id === 'freellm' ? PALETTE.freellm : PALETTE.ink
+  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : id === 'freellm' ? PALETTE.freellm : id === 'clock' ? PALETTE.clock : PALETTE.ink
   return art(id, frame).map(t => [{ t, c, b: !!c }])
 }
 
@@ -372,6 +400,8 @@ export type SceneView = {
   noHealth?: boolean
   /** No Mercy: edits answered right in this fight. */
   passed?: number
+  /** Rush: when the clock runs out (epoch ms; null before the first question), score, best. */
+  rush?: { endsAt: number | null; score: number; best: number } | null
 }
 
 export type SceneInput = {
@@ -386,6 +416,19 @@ export type SceneInput = {
   playerHp: number
   /** Tokens the hit fighter lost: how many words spill out of its bar. */
   lost?: number
+  /** Now, in epoch ms (Rush's clock). */
+  now?: number
+}
+
+/** Rush: seconds left as m:ss, and a bar that drains with them. */
+export function rushTime(endsAt: number | null, now: number, total = 60000): { text: string; bar: Line; left: number } {
+  const left = endsAt === null ? total : Math.max(0, endsAt - now)
+  const sec = Math.ceil(left / 1000)
+  const text = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+  const cells = 16
+  const n = Math.max(0, Math.min(cells, Math.round((left / total) * cells)))
+  const c = left > total / 2 ? PALETTE.ink : left > total / 5 ? PALETTE.low : PALETTE.hurt
+  return { text, left, bar: [seg('TIME', PALETTE.ink, true), seg('▐'), seg('█'.repeat(n), c), seg('░'.repeat(cells - n), PALETTE.light), seg('▌ ' + text, c, true)] }
 }
 
 export const INTRO_STEPS = 8
@@ -408,9 +451,18 @@ export function battlefield(s: SceneInput): Line[] {
   const shake = s.anim?.kind === 'enemyHit' && hit ? (s.anim.frame % 2 ? 2 : -1) : 0
   const eAt = Math.max(0, Math.min(W - eW, W - eW - 2 + slideIn + shake))
   const remaining = v.stages ? v.stages - v.stage : 1
-  const bossColor = e && e.id === 'skynet' ? PALETTE.skynet : e && e.id === 'freellm' ? PALETTE.freellm : PALETTE.boss
+  const bossColor = e && e.id === 'skynet' ? PALETTE.skynet : e && e.id === 'freellm' ? PALETTE.freellm : e && e.id === 'clock' ? PALETTE.clock : PALETTE.boss
+  const rt = v.rush ? rushTime(v.rush.endsAt, s.now ?? Date.now()) : null
   const status: Line[] = !e
     ? []
+    : inPlace && rt
+      ? [
+          [seg(' ' + e.name, bossColor, true)],
+          [seg(`      :L${e.level}`, PALETTE.ink, true)],
+          [seg('   '), ...rt.bar],
+          [seg(' │ right +2s, wrong -5s', PALETTE.mid)],
+          [seg(' └' + '─'.repeat(26) + '▶', PALETTE.ink)],
+        ]
     : inPlace && v.noHealth
       ? [
           [seg(' ' + e.name, bossColor, true)],
@@ -451,7 +503,15 @@ export function battlefield(s: SceneInput): Line[] {
   const dodge = s.anim?.kind === 'dodge' && hit ? Math.min(s.anim.frame, 6 - s.anim.frame) : 0
   const pAt = Math.max(0, 2 - pSlide + pShake + dodge)
   const sx = Math.max(pW + 6, W - 31)
-  const pStatus: Line[] = inPlace && v.noHealth
+  const pStatus: Line[] = inPlace && v.rush
+    ? [
+        [seg(v.player.name || 'YOU', PALETTE.ink, true)],
+        [seg(`  score: ${v.rush.score}`, PALETTE.ink, true)],
+        [seg(`  best:  ${v.rush.best}`, PALETTE.mid)],
+        [seg('')],
+        [seg('◀' + '─'.repeat(26) + '┘', PALETTE.ink)],
+      ]
+    : inPlace && v.noHealth
     ? [
         [seg(v.player.name || 'YOU', PALETTE.ink, true)],
         [seg('  one wrong answer: you lose', PALETTE.mid)],
@@ -718,6 +778,39 @@ export const TROPHY_ART: Record<string, string[]> = {
     R`  | |_______________| |  `,
     R`  |  ::  [ OFFLINE ]  |  `,
     R`  |___________________|  `,
+  ],
+  'rush-first': [
+    R`      _______      `,
+    R`     /  12   \     `,
+    R`    |    |    |    `,
+    R`    | 9  o  3 |    `,
+    R`     \   6   /     `,
+    R`      '-----'      `,
+    R`   made it: 60s    `,
+  ],
+  'rush-10': [
+    R`       .--.        `,
+    R`      /  /|   10   `,
+    R`     / ./ |  right `,
+    R`    /./   |        `,
+    R`   '-'    '        `,
+    R`   quick thinker   `,
+  ],
+  'rush-25': [
+    R`   _____  _____    `,
+    R`  |     \/     |   `,
+    R`  | ==== | ====|   `,
+    R`  | ==== | ====| >>`,
+    R`  |______|_____|   `,
+    R`   25 in a minute  `,
+  ],
+  'rush-50': [
+    R`    .---------.    `,
+    R`    | CPU 50  |    `,
+    R`  --|  ////   |--  `,
+    R`  --|  ////   |--  `,
+    R`    '---------'    `,
+    R`    ~ 5.0 GHz ~    `,
   ],
   'battle-bughunter': [
     R` [==][==][==][==][==] `,

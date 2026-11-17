@@ -42,6 +42,8 @@ const LADDERS = {
   ],
   // Bug Hunter: it slips a bug into a function Claude wrote; you pick the fix.
   bughunter: [{ id: 'freellm', name: 'FREE CHINESE LLM', level: 64, hp: 150, dmg: 28, boss: true, color: '#c94fd6' }],
+  // Rush: THE CLOCK. No health bars: answer as many as you can before time runs out.
+  rush: [{ id: 'clock', name: 'THE CLOCK', level: 60, hp: 1, dmg: 0, boss: true, color: '#d9a13b' }],
   // One enemy without health: it falls when Claude finishes the prompt (hp unused).
   nomercy: [{ id: 'skynet', name: 'SKYNET', level: 100, hp: 1, dmg: 0, boss: true, color: '#e0533d' }],
 };
@@ -56,9 +58,16 @@ const MODES = {
   endless: { label: 'Endless', difficulties: null },
   nomercy: { label: 'No Mercy', difficulties: [], noHealth: true },
   bughunter: { label: 'Bug Hunter', difficulties: ['easy', 'medium', 'hard'], bugs: true },
+  rush: { label: 'Rush', difficulties: ['easy', 'medium', 'hard'], rush: true },
 };
 
 const PLAYER_MAX = 100;
+
+// Rush: the clock starts at the first question; right answers add time, wrong ones cost more.
+const RUSH_MS = 60 * 1000;
+const RUSH_BONUS_MS = 2000;
+const RUSH_PENALTY_MS = 5000;
+const RUSH_TROPHIES = [[50, 'rush-50'], [25, 'rush-25'], [10, 'rush-10']];
 const LIVES = 3;
 const DAMAGE = { easy: 35, medium: 40, hard: 50 };
 
@@ -146,8 +155,9 @@ function view(s = load()) {
     best: s.best,
     wins: s.wins,
     hasQuestion: !!s.pending,
-    noHealth: !!(s.mode && MODES[s.mode].noHealth),
+    noHealth: !!(s.mode && (MODES[s.mode].noHealth || MODES[s.mode].rush)),
     passed: s.passed || 0, // No Mercy: edits answered right in this fight
+    rush: s.mode === 'rush' && s.rush ? { endsAt: s.rush.endsAt || null, score: s.rush.score || 0, best: (s.best && s.best.rush) || 0, now: Date.now() } : null,
   };
 }
 
@@ -161,6 +171,7 @@ function start(mode, owner = {}) {
   const s = load();
   Object.assign(s, { mode, stage: 0, wave: 1, lives: LIVES, playerHp: PLAYER_MAX, enemyHp: null, pending: null, phase: 'fight', passed: 0 });
   s.owner = { session: owner.session || null, project: owner.project || null, at: Date.now() };
+  s.rush = mode === 'rush' ? { endsAt: null, score: 0 } : null; // the clock starts at the first question
   s.enemyHp = enemyOf(s).hp;
   return save(s);
 }
@@ -216,6 +227,17 @@ function nextQuestion(db, { repoId, rnd = Math.random } = {}) {
   const s = load();
   if (!s.mode || s.phase !== 'fight') return { error: 'no battle in progress' };
   if (MODES[s.mode].noHealth) return { error: 'SKYNET only asks about the edits Claude makes', state: view(s) };
+  if (MODES[s.mode].rush) {
+    if (s.rush.endsAt && Date.now() >= s.rush.endsAt) {
+      const r = finishRush(db, s);
+      save(s);
+      return { ...r, state: view(s) };
+    }
+    if (!s.rush.endsAt) {
+      s.rush.endsAt = Date.now() + RUSH_MS; // the clock starts with the first question
+      save(s);
+    }
+  }
   if (MODES[s.mode].bugs) {
     // Bug Hunter: a fresh bug in one of Claude's functions every time.
     const q = require('./bughunt').build(db, { repoId, rnd });
@@ -272,9 +294,38 @@ function publicQ(q, p) {
  * Answer the pending question with a key (a-d). Grades through the normal
  * grader (XP, stats, trophies), then resolves the exchange of blows.
  */
+/** Rush is over: record the best score and the trophies it earned. Mutates s. */
+function finishRush(db, s) {
+  const score = (s.rush && s.rush.score) || 0;
+  s.phase = 'gameover';
+  s.pending = null;
+  s.best.rush = Math.max(s.best.rush || 0, score);
+  const rewards = require('./rewards');
+  const trophies = [];
+  const first = rewards.grant(db, 'rush-first', `finished a Rush with ${score} right`);
+  if (first) trophies.push(first);
+  for (const [n, id] of RUSH_TROPHIES) {
+    if (score >= n) {
+      const t = rewards.grant(db, id, `${score} right in one Rush`);
+      if (t) trophies.push(t);
+    }
+  }
+  return { rushOver: true, score, best: s.best.rush, trophies };
+}
+
+/** Rush: has the clock run out? Ends the run if so (also when nobody answered). */
+function rushCheck(db) {
+  const s = load();
+  if (s.mode !== 'rush' || s.phase !== 'fight' || !s.rush || !s.rush.endsAt || Date.now() < s.rush.endsAt) return { over: false, state: view(s) };
+  const r = finishRush(db, s);
+  save(s);
+  return { over: true, ...r, state: view(s) };
+}
+
 async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   const s = load();
   if (!s.pending) return { error: 'no question pending' };
+  if (s.mode === 'rush') return answerRush(db, s, key, { cfg, root });
   const p = s.pending;
   const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', p.id));
   if (!q) return { error: 'question vanished' };
@@ -285,6 +336,35 @@ async function answer(db, key, { cfg, root, rnd = Math.random } = {}) {
   s.pending = null;
   save(s);
   return { ...ev, state: view(s) };
+}
+
+/**
+ * Rush: grade against the clock. The time is checked here, not by the UI: an
+ * answer after the clock ran out doesn't count, and ends the run.
+ */
+async function answerRush(db, s, key, { cfg, root }) {
+  const p = s.pending;
+  if (!s.rush.endsAt || Date.now() >= s.rush.endsAt) {
+    const r = finishRush(db, s);
+    save(s);
+    return { rush: true, correct: false, late: true, ...r, state: view(s) };
+  }
+  const q = store.hydrate(db.get('SELECT * FROM questions WHERE id = ?', p.id));
+  if (!q) return { error: 'question vanished' };
+  const k = String(key).trim().toLowerCase();
+  if (!p.map[k]) return { error: 'answer with a, b, c or d' };
+  const graded = await require('./grader').answer(db, q, p.map[k], { mode: 'battle', cfg, root });
+  const correct = graded.correct === true;
+  if (correct) {
+    s.rush.score += 1;
+    s.rush.endsAt += RUSH_BONUS_MS;
+  } else s.rush.endsAt -= RUSH_PENALTY_MS;
+  s.pending = null;
+  const ev = { rush: true, correct, correctKey: p.correctKey, picked: k, xp: graded.xp, xpCapped: !!graded.xpCapped, explanation: q.explanation, score: s.rush.score, trophies: graded.trophies || [], enemyName: 'THE CLOCK', playerName: playerName() };
+  let over = null;
+  if (Date.now() >= s.rush.endsAt) over = finishRush(db, s);
+  save(s);
+  return { ...ev, ...(over ? { ...over, trophies: [...ev.trophies, ...over.trophies] } : {}), state: view(s) };
 }
 
 /** Is a No Mercy fight on? Then SKYNET intercepts Claude's edits. */
@@ -414,9 +494,9 @@ function exchange(db, s, correct, difficulty, rnd, extra) {
 function resume(owner = {}) {
   const s = load();
   if (!s.mode) return save(s);
-  if (s.phase === 'victory' || MODES[s.mode].noHealth) return start(s.mode, owner);
+  if (s.phase === 'victory' || MODES[s.mode].noHealth || MODES[s.mode].rush) return start(s.mode, owner); // a fresh run, a fresh clock
   s.phase = 'fight';
   return save(s);
 }
 
-module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, intercept, turnEnd, noMercyActive, endStale, NOMERCY_MAX_MS, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };
+module.exports = { playerName, load, save, view, start, quit, resume, nextQuestion, answer, rushCheck, RUSH_MS, RUSH_BONUS_MS, RUSH_PENALTY_MS, intercept, turnEnd, noMercyActive, endStale, NOMERCY_MAX_MS, toFour, enemyOf, LADDERS, MODES, PLAYER_MAX, LIVES, DAMAGE, MISS_CHANCE };

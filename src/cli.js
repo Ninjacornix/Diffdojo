@@ -545,6 +545,7 @@ const commands = {
         if (sub === 'battle-quit') return out({ state: battle.view(battle.quit()) });
         if (sub === 'battle-resume') return out({ state: battle.view(battle.resume(ctx)) });
         if (sub === 'battle-turn-end') return out(battle.turnEnd(d, { reason: pos[2] }, ctx));
+        if (sub === 'battle-rush-check') return out(battle.rushCheck(d));
         if (sub === 'battle-question') return out(battle.nextQuestion(d, { repoId: enabled ? repoId : null }));
         if (sub === 'battle-answer') return out({ ...(await battle.answer(d, pos[2], { cfg: config.load(repoId), root })), ...status() });
       } catch (e) {

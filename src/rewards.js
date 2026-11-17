@@ -46,6 +46,10 @@ const TROPHIES = {
   'evil-claude': 'Evil Claude Defeated — cleared the Professional battle ladder',
   skynet: 'Judgment Averted — defeated SKYNET in No Mercy',
   'battle-bughunter': 'Firewall — defeated FREE CHINESE LLM in Bug Hunter',
+  'rush-first': 'Against the Clock — finished your first Rush',
+  'rush-10': 'Quick Thinker — 10 right in one Rush',
+  'rush-25': 'Speed Reader — 25 right in one Rush',
+  'rush-50': 'Overclocked — 50 right in one Rush',
 };
 
 function beltIndex(b) {
