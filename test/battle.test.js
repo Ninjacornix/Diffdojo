@@ -149,6 +149,22 @@ test('the terminal game plays a full exchange: intro, question, hit, next enemy'
   for (const line of G.draw()) assert.strictEqual(line.reduce((n, s) => n + [...s.t].length, 0), 72, 'every row fills the screen width');
 });
 
+test('the terminal game: RUN ends the battle and goes back to the menu', async () => {
+  const term = require('../src/battle-term');
+  const scene = await term.loadScene();
+  battle.start('easy');
+  const G = term.game(scene, { db, repoId: null, root: null, cfg, width: 72, rnd: never });
+  const text = () => G.draw().map((l) => l.map((s) => s.t).join('')).join('\n');
+  await G.press('enter');
+  await G.press('enter');
+  assert.match(text(), /RUN: end this battle/);
+  for (let i = 0; i < 6; i++) await G.press('down'); // past the answers, onto RUN
+  await G.press('enter');
+  assert.strictEqual(G.g.phase, 'menu');
+  assert.strictEqual(battle.load().mode, null, 'the battle is over');
+  assert.match(text(), /Choose|Easy/);
+});
+
 test('the demo makes a sandbox project with questions about a simulated Claude change', async () => {
   const os = require('os');
   const path = require('path');

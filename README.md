@@ -35,7 +35,7 @@ DiffDojo's own questions are checked against real evidence: running the code, re
 
 While Claude works, questions turn into a retro turn-based fight above your prompt, in the style of old handheld RPG battles with original ASCII-art characters, drawn right on your terminal in its own colors. The screenshot at the top is a real frame: Evil Claude, the final boss of Professional mode, asks about a line in the change Claude just made.
 
-- **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses).
+- **Up/down to pick an answer, Enter to attack.** A correct answer hits the enemy; a wrong one lets it hit you (and sometimes it misses). Pick **RUN** under the answers to end the battle and go back to the menu.
 - Beat an enemy and your HP is fully restored for the next one. You have **3 lives**: lose them all and you start the ladder over.
 - **Modes:** Easy, Medium, Hard, **Professional** (whose final boss is **Evil Claude**, an angry orange starburst) and **Endless** (waves get stronger; your best wave is recorded).
 - **Animated:** enemies slide in with a "wants to fight!" intro, every sprite has an idle loop, hits shake and flash the target, HP bars drain, and the text box arrow blinks.
@@ -55,6 +55,8 @@ For when you really want to keep up with Claude: **every edit waits for you.** N
 - *What does this do?* When the change uses something like `Promise.all`, `heapq.heappush` or `std::lock_guard`.
 
 **Answer right**, you beat SKYNET and the edit goes through (with XP). **Answer wrong, or close the question,** SKYNET wins: the edit is rejected and Claude stops working, so you can look at what it was doing before you let it go on.
+
+Turn it on from the battle menu (**No Mercy**, which shows SKYNET and an on/off switch), or with a command:
 
 ```
 /nomercy on     # in Claude Code

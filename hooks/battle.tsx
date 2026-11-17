@@ -9,6 +9,7 @@ import type { EngineInterface, On } from 'claude-code'
 import type { BattleQuestion, BattleResult, BattleView, BattleAnim } from '../types'
 import { ANIM_FRAMES, INTRO_STEPS, PALETTE, TITLE, battlefield, box, plain, spriteLines, join, pad, wrap } from './scene.mts'
 import type { BoxRow, Line } from './scene.mts'
+import { setNoMercy } from './nomercy'
 
 type Engine = EngineInterface
 
@@ -26,6 +27,9 @@ const anim = atom({ plugin: 'diffdojo', key: 'battleAnim' } as const, null, { sh
 const intro = atom({ plugin: 'diffdojo', key: 'battleIntro' } as const, -1)
 const tick = atom({ plugin: 'diffdojo', key: 'battleTick' } as const, 0)
 const busy = atom({ plugin: 'diffdojo', key: 'battleBusy' } as const, false)
+// The same value hooks/nomercy.tsx owns, and whether SKYNET's screen is showing.
+const noMercy = atom({ plugin: 'diffdojo', key: 'noMercy' } as const, false)
+const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, false)
 
 const IDLE_MS = 650
 const FRAME_MS = 90
@@ -181,6 +185,9 @@ async function toMenu($: Engine) {
   await update($, intro, () => -1)
 }
 
+// The option in every fight that ends it and goes back to the menu.
+const RUN = '__run'
+
 const MODES = [
   ['easy', 'Easy', 'Typo Sprite, Lint Gremlin, Off-by-One Imp'],
   ['medium', 'Medium', 'Null Pointer, Memory Leak, Flaky Test'],
@@ -188,6 +195,9 @@ const MODES = [
   ['professional', 'Professional', 'Segfault Specter, Legacy Monolith, EVIL CLAUDE'],
   ['endless', 'Endless', 'waves that keep coming'],
 ]
+
+// Not a ladder: No Mercy's boss guards Claude's edits (hooks/nomercy.tsx).
+const NO_MERCY = 'nomercy'
 
 /** Called from the plugin's one session.start hook. */
 export async function battleSessionStart($: Engine) {
@@ -204,7 +214,10 @@ export function registerBattle(on: On) {
       if (arg === 'off') await $.ui.close({ id: BATTLE_PANE })
       return { text: arg === 'on' ? 'Battle mode on: fights start while Claude works.' : 'Battle mode off: questions show in the plain box above the prompt.' }
     }
-    if (arg === 'menu') await toMenu($)
+    if (arg === 'menu') {
+      await update($, skynetView, () => false)
+      await toMenu($)
+    }
     await openBattle($, true)
     return { text: 'DiffDojo Battle opened. Up/down and Enter to fight, Esc to return to the prompt.' }
   })
@@ -243,8 +256,48 @@ export function registerBattle(on: On) {
     const rule = <Text>{'═'.repeat(W)}</Text>
     const rowsOf = (rows: BoxRow[]) => draw(box(rows, W, t, false, 0).slice(1, -1))
 
+    // ---- No Mercy: SKYNET's screen, where the mode is switched on and off
+    if ((await read($, skynetView)) && (!s || !s.mode || s.phase === 'menu')) {
+      const armed = await read($, noMercy)
+      return (
+        <Box flexDirection="column">
+          {draw([plain('', W), plain('   N O   M E R C Y', W, PALETTE.skynet, true), plain('', W)])}
+          {draw(spriteLines('skynet', t).map(l => pad(join([], l, 8), W)))}
+          {rule}
+          {rowsOf(
+            wrap(
+              [
+                armed
+                  ? 'SKYNET is guarding your files. Every edit Claude makes waits for your answer to one question about it. Answer right and the edit goes through. Answer wrong and SKYNET rejects it and Claude stops.'
+                  : 'SKYNET guards your files: once No Mercy is on, every edit Claude makes waits for your answer to one question about it. Answer right and the edit goes through. Answer wrong and SKYNET rejects it and Claude stops.',
+                armed ? 'No Mercy: ON' : 'No Mercy: OFF',
+              ],
+              W - 6,
+            ).map(text => ({ text })),
+          )}
+          <Select
+            key="skynet"
+            autoFocus
+            options={[
+              { value: 'toggle', label: armed ? 'Turn No Mercy off' : 'Turn No Mercy on: face SKYNET' },
+              { value: 'menu', label: 'Back to the menu' },
+            ]}
+            onSelect={async v => {
+              if (v === 'toggle') {
+                const text = await setNoMercy($, !armed)
+                $.ui.toast(text.split('. ')[0] + '.')
+              } else await update($, skynetView, () => false)
+            }}
+          />
+          {rule}
+          <Text dimColor>up/down choose · Enter select · Esc back to the prompt</Text>
+        </Box>
+      )
+    }
+
     // ---- menu
     if (!s || !s.mode || s.phase === 'menu') {
+      const mercy = await read($, noMercy)
       const best = (s && s.best) || {}
       const wins = (s && s.wins) || {}
       return (
@@ -256,11 +309,14 @@ export function registerBattle(on: On) {
             key="mode"
             label="Choose your fight"
             autoFocus
-            options={MODES.map(([value, label, who]) => ({
-              value,
-              label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${wins[value] ? `  cleared x${wins[value]}` : ''}`,
-            }))}
-            onSelect={value => choose($, value)}
+            options={[
+              ...MODES.map(([value, label, who]) => ({
+                value,
+                label: `${label.padEnd(13)} ${who}${value === 'endless' && best.endless ? `  (best wave ${best.endless})` : ''}${wins[value] ? `  cleared x${wins[value]}` : ''}`,
+              })),
+              { value: NO_MERCY, label: `${'No Mercy'.padEnd(13)} SKYNET guards every edit Claude makes  [${mercy ? 'ON' : 'OFF'}]` },
+            ]}
+            onSelect={value => (value === NO_MERCY ? update($, skynetView, () => true) : choose($, value))}
           />
           {rule}
           <Text dimColor>up/down choose · Enter fight · Esc back to the prompt</Text>
@@ -327,12 +383,16 @@ export function registerBattle(on: On) {
         <Select
           key={`q-${q.id}`}
           autoFocus
-          options={Object.entries(q.choices).map(([k, val]) => ({ value: k, label: `${k}) ${val}` }))}
-          onSelect={value => attack($, value)}
+          options={[
+            ...Object.entries(q.choices).map(([k, val]) => ({ value: k, label: `${k}) ${val}` })),
+            { value: RUN, label: 'RUN: end this battle and go back to the menu' },
+          ]}
+          onSelect={value => (value === RUN ? toMenu($) : attack($, value))}
         />
       )
     } else {
       rows = [{ text: `${enemy.name} is thinking${'.'.repeat((t % 3) + 1)}` }]
+      control = <Select key="run" options={[{ value: RUN, label: 'RUN: end this battle and go back to the menu' }]} onSelect={() => toMenu($)} />
     }
 
     return (

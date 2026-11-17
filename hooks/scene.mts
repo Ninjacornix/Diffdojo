@@ -20,6 +20,7 @@ export const PALETTE = {
   hurt: '#e0533d', // a hit flashes red
   low: '#d9a13b', // HP getting low
   boss: '#d97757', // Evil Claude's orange
+  skynet: '#e0533d', // SKYNET, No Mercy's boss: red
 }
 
 // ---------------------------------------------------------------- sprites
@@ -160,6 +161,34 @@ const ART: Record<string, string[]> = {
   ],
 }
 
+// SKYNET, No Mercy's boss: a server rack with one great eye, guarding your files.
+const SKYNET: string[][] = [
+  [
+    R`   ___________________   `,
+    R`  |  _______________  |  `,
+    R`  | |    _______    | |  `,
+    R`  | |   /  ___  \   | |  `,
+    R`  | |  |  (( ))  |  | |  `,
+    R`  | |   \_______/   | |  `,
+    R`  | |_______________| |  `,
+    R`  |  ::::  :::  ::::  |  `,
+    R`  |  [##]  [#]  [##]  |  `,
+    R`  |___________________|  `,
+  ],
+  [
+    R`   ___________________   `,
+    R`  |  _______________  |  `,
+    R`  | |    _______    | |  `,
+    R`  | |   /  ___  \   | |  `,
+    R`  | |  |  ( O )  |  | |  `,
+    R`  | |   \_______/   | |  `,
+    R`  | |_______________| |  `,
+    R`  |  ::::  :::  ::::  |  `,
+    R`  |  [##]  [ ]  [##]  |  `,
+    R`  |___________________|  `,
+  ],
+]
+
 // Evil Claude: an angry starburst; its rays swing between two angles.
 const EVIL: string[][] = [
   [
@@ -189,6 +218,7 @@ const EVIL: string[][] = [
 /** The text rows of a character's idle frame (0 or 1). */
 export function art(id: string, frame: number): string[] {
   if (id === 'evil') return EVIL[frame % 2]
+  if (id === 'skynet') return SKYNET[frame % 2]
   const src = ART[id] || ART.typo
   const w = Math.max(...src.map(r => r.length))
   const rows = src.map(r => r.padEnd(w))
@@ -197,7 +227,7 @@ export function art(id: string, frame: number): string[] {
 }
 
 export function spriteLines(id: string, frame: number, hurt = false): Line[] {
-  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : PALETTE.ink
+  const c = hurt ? PALETTE.hurt : id === 'evil' ? PALETTE.boss : id === 'skynet' ? PALETTE.skynet : PALETTE.ink
   return art(id, frame).map(t => [{ t, c, b: !!c }])
 }
 
