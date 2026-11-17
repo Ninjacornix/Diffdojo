@@ -52,6 +52,8 @@ export type BattleView = {
   noHealth?: boolean
   /** No Mercy: edits answered right in this fight. */
   passed?: number
+  /** Rush: when the clock runs out (epoch ms; null before the first question), score and best. */
+  rush?: { endsAt: number | null; score: number; best: number; now?: number } | null
 }
 
 /** A battle question: always four answers, a-d. */
@@ -89,6 +91,10 @@ export type BattleResult = {
   playerHpBefore: number
   playerHpAfter: number
   trophies: { id: string; name: string }[]
+  /** Rush: answered against the clock; the score, and whether time ran out. */
+  rush?: boolean
+  score?: number
+  rushOver?: boolean
   /** No Mercy: this exchange was SKYNET intercepting one of Claude's edits. */
   intercept?: boolean
   /** No XP because today's practice XP limit is reached. */
@@ -140,6 +146,7 @@ declare module 'claude-code' {
       menuTab: string
       achievements: Shaped<Achievements | null>
       trophyView: string
+      rushFlash: string
       scores: Shaped<Scores | null>
       sharePreview: string
       sharedAt: string

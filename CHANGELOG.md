@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+- **Rush**, a special fight against THE CLOCK: 60 seconds to get as many right as you can. A right answer adds 2 seconds, a wrong one takes 5 away, and the next question comes straight away. The clock starts with the first question and is kept by DiffDojo itself, so a late answer doesn't count and a run that times out ends on its own. Your best Rush is recorded (and shown under Achievements).
+- Four Rush trophies, each with its own ASCII art: *Against the Clock* (finish a Rush), *Quick Thinker* (10 right in one run), *Speed Reader* (25), *Overclocked* (50).
+
 ## 0.3.1
 
 Fixes from a release review.

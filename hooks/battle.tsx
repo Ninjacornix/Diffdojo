@@ -32,6 +32,8 @@ const skynetView = atom({ plugin: 'diffdojo', key: 'skynetView' } as const, fals
 // The menu's screens, and what they show.
 const menuTab = atom({ plugin: 'diffdojo', key: 'menuTab' } as const, 'main')
 const achievements = atom({ plugin: 'diffdojo', key: 'achievements' } as const, null, { shape: 'ach-1' })
+// Rush: the one-line verdict on the last answer, shown above the next question.
+const rushFlash = atom({ plugin: 'diffdojo', key: 'rushFlash' } as const, '')
 // The trophy opened on the Achievements screen ('' = the list).
 const trophyView = atom({ plugin: 'diffdojo', key: 'trophyView' } as const, '')
 const scores = atom({ plugin: 'diffdojo', key: 'scores' } as const, null, { shape: 'sco-1' })
@@ -146,8 +148,31 @@ async function startIntro($: Engine) {
   frames($)
 }
 
+// Rush: the clock ran out while nobody answered; ask once whether the run is over.
+let rushChecking = false
+async function rushTimeout($: Engine) {
+  if (rushChecking) return
+  rushChecking = true
+  try {
+    const r = await cli($, ['battle-rush-check'])
+    if (r.over && r.state) {
+      await update($, question, () => null)
+      await update($, rushFlash, () => '')
+      for (const t of r.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 9000 })
+      await setScene($, r.state as BattleView)
+    }
+  } finally {
+    rushChecking = false
+  }
+}
+
 async function loadQuestion($: Engine) {
   const r = await cli($, ['battle-question'])
+  if (r.rushOver && r.state) {
+    await update($, question, () => null)
+    await setScene($, r.state as BattleView)
+    return
+  }
   if (r.error) {
     $.ui.toast(`DiffDojo: ${r.error}`)
     return
@@ -249,8 +274,9 @@ async function endIntro($: Engine) {
     return
   }
   await update($, intro, () => -1)
-  // SKYNET asks nothing between edits: it waits for Claude's next edit.
-  if (!(await read($, scene))?.noHealth) await loadQuestion($)
+  // SKYNET asks nothing between edits: it waits for Claude's next edit. Rush goes straight on.
+  const v = await read($, scene)
+  if (!v?.noHealth || v.rush) await loadQuestion($)
 }
 
 async function attack($: Engine, key: string) {
@@ -261,6 +287,20 @@ async function attack($: Engine, key: string) {
   try {
     const r = await cli($, ['battle-answer', key])
     if (r.error) return $.ui.toast(`DiffDojo: ${r.error}`)
+    if (r.rush) {
+      // Rush: no result screen, the next question comes at once (or the TIME! screen).
+      for (const t of r.trophies ?? []) $.ui.toast(`Trophy unlocked: ${t.name}`, { timeoutMs: 9000 })
+      await update($, question, () => null)
+      if (r.rushOver) {
+        await update($, rushFlash, () => '')
+        await setScene($, r.state as BattleView)
+        return
+      }
+      await update($, rushFlash, () => (r.correct ? `Correct! +2s${r.xp ? `  +${r.xp} XP` : ''}` : `Wrong, it was ${r.correctKey}. -5s`))
+      await setScene($, r.state as BattleView)
+      await loadQuestion($)
+      return
+    }
     await update($, outcome, () => ({ ...(r as BattleResult), picked: key, prompt: q.prompt }))
     await update($, after, () => r.state as BattleView)
     await track($, r.state as BattleView)
@@ -279,7 +319,7 @@ async function proceed($: Engine) {
   await update($, question, () => null)
   await update($, anim, () => null)
   if (next) await setScene($, next)
-  if (!next || next.phase !== 'fight' || next.noHealth) return
+  if (!next || next.phase !== 'fight' || (next.noHealth && !next.rush)) return
   if (res && res.enemyDefeated) await startIntro($) // a new enemy slides in
   else await loadQuestion($)
 }
@@ -398,6 +438,7 @@ const MODES = [
 const NO_MERCY = 'nomercy'
 const BUG_HUNTER = 'bughunter'
 const SPECIAL = [
+  ['rush', 'Rush', 'THE CLOCK: as many right as you can in 60 seconds'],
   [NO_MERCY, 'No Mercy', 'SKYNET: answer for every edit Claude makes'],
   [BUG_HUNTER, 'Bug Hunter', 'FREE CHINESE LLM slips a bug into Claude\'s code: find the fix'],
 ]
@@ -664,6 +705,7 @@ export function registerBattle(on: On) {
           : [
               { text: `Belt: ${ach.belt.toUpperCase()}  ·  ${ach.xp} XP  ·  streak ${ach.streak} day${ach.streak === 1 ? '' : 's'}  ·  trophies: ${got.length} of ${ach.trophies.length}` },
               ...ach.tracks.slice(0, 4).map(x => ({ text: `  ${x.name}: ${x.belt}, ${x.xp} XP${x.nextAt ? ` (next belt at ${x.nextAt})` : ''}`, dim: true })),
+              ...(ach.battle.best.rush ? [{ text: `  Best Rush: ${ach.battle.best.rush} right in a minute`, dim: true }] : []),
             ]
         const list = ach ? [...got, ...ach.trophies.filter(x => !x.earned)] : []
         return titled(
@@ -758,8 +800,10 @@ export function registerBattle(on: On) {
     // ---- game over / victory
     if (s.phase === 'gameover' || s.phase === 'victory') {
       const won = s.phase === 'victory'
-      const id = s.noHealth ? (won ? 'player' : 'skynet') : won && s.mode === 'professional' ? 'evil' : !won && s.mode === BUG_HUNTER ? 'freellm' : 'player'
-      const message = s.noHealth
+      const id = s.rush ? 'clock' : s.noHealth ? (won ? 'player' : 'skynet') : won && s.mode === 'professional' ? 'evil' : !won && s.mode === BUG_HUNTER ? 'freellm' : 'player'
+      const message = s.rush
+        ? `TIME! You got ${s.rush.score} right.${s.rush.score >= s.rush.best && s.rush.score > 0 ? ' A new best!' : ` Your best is ${s.rush.best}.`}`
+        : s.noHealth
         ? won
           ? `Claude finished your prompt, and you answered for all ${s.passed} of its edits. SKYNET falls!`
           : "SKYNET wins. Claude's edit was rejected and Claude stopped. Look at what it was doing, then face SKYNET again."
@@ -768,7 +812,7 @@ export function registerBattle(on: On) {
           : 'Out of lives. Back to the first enemy with full health and 3 lives.'
       return (
         <Box flexDirection="column">
-          {draw([plain('', W), plain(won ? '        V I C T O R Y' : '        G A M E   O V E R', W, won ? PALETTE.ink : PALETTE.hurt, true), plain('', W)])}
+          {draw([plain('', W), plain(s.rush ? '        T I M E !' : won ? '        V I C T O R Y' : '        G A M E   O V E R', W, s.rush ? PALETTE.clock : won ? PALETTE.ink : PALETTE.hurt, true), plain('', W)])}
           {draw(spriteLines(id, t).map(l => pad(join([], l, 8), W)))}
           {rule}
           {rowsOf(wrap([message], W - 6).map(text => ({ text })))}
@@ -776,7 +820,7 @@ export function registerBattle(on: On) {
             key="end"
             autoFocus
             options={[
-              { value: 'again', label: s.noHealth ? 'Face SKYNET again (next prompt)' : won ? 'Fight this ladder again' : 'Try again' },
+              { value: 'again', label: s.rush ? 'Rush again' : s.noHealth ? 'Face SKYNET again (next prompt)' : won ? 'Fight this ladder again' : 'Try again' },
               { value: 'menu', label: 'Choose another mode' },
             ]}
             onSelect={v => (v === 'again' ? again($) : toMenu($))}
@@ -794,7 +838,9 @@ export function registerBattle(on: On) {
     const playerHp = res && !res.intercept ? (a?.kind === 'playerHit' ? lerp(res.playerHpBefore, res.playerHpAfter) : res.playerHpAfter) : s.player.hp
     const sliding = i >= 0
     const lost = res && !res.intercept ? (a?.kind === 'enemyHit' ? res.enemyHpBefore - res.enemyHpAfter : res.playerHpBefore - res.playerHpAfter) : 0
-    const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp, lost })
+    const now = Date.now()
+    if (s.rush && s.rush.endsAt && now >= s.rush.endsAt && s.phase === 'fight') void rushTimeout($)
+    const field = battlefield({ view: s, width: W, tick: t, intro: sliding ? i : INTRO_STEPS, anim: a, enemyHp, playerHp, lost, now })
 
     let rows: BoxRow[] = []
     let control: unknown = null
@@ -819,6 +865,10 @@ export function registerBattle(on: On) {
       control = <Select key="continue" autoFocus options={[{ value: 'go', label: done ? 'Continue (Enter)' : '...' }]} onSelect={() => proceed($)} />
     } else if (q) {
       rows = wrap([`${enemy.name} asks: ${q.prompt}`], W - 6).map(text => ({ text }))
+      if (s.rush) {
+        const flash = await read($, rushFlash)
+        if (flash) rows.unshift({ text: flash, dim: true })
+      }
       if (q.location) rows.push({ text: `${q.family} · ${q.difficulty} · ${q.location}`, dim: true })
       if (q.code && q.code.split('\n').length <= 10) for (const c of q.code.split('\n')) rows.push({ text: '  ' + c, dim: true })
       control = (

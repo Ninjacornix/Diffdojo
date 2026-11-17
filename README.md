@@ -64,11 +64,15 @@ Press 1 to 4 while your prompt is empty. For typed answers (a line number, an ou
 `/battle` opens a menu with a few screens:
 
 - **Fight**: the ladders. Easy, Medium, Hard, Professional (its last boss is Evil Claude), and Endless, where the waves keep getting tougher.
-- **Special fights**: No Mercy and Bug Hunter, both described below.
+- **Special fights**: Rush, Bug Hunter and No Mercy, all described below.
 - **Prepare**: pick a topic, or type one ("Rust lifetimes"), and Claude writes a set of questions on it for your next fights. Without Claude, they come from the question packs.
 - **Scores**: your XP, belt, streak and accuracy across all your projects, plus a line per project.
 - **Achievements**: belts and trophies. Each trophy has its own little ASCII picture.
 - **Settings**: which model writes your questions (Haiku, Sonnet or Opus), how much effort it puts in, and whether Claude writes questions at all. Bigger model or more effort means harder questions and more of your plan used.
+
+### Rush
+
+A race against THE CLOCK. You have 60 seconds to get as many questions right as you can. A right answer adds 2 seconds, a wrong one takes 5 away, so guessing doesn't pay. There's no result screen between questions, just the next one, and when time runs out you get your score and your best. The clock starts with the first question, not during the intro, and it's kept by DiffDojo itself, so an answer that arrives after time is up doesn't count. There are trophies for finishing your first Rush and for 10, 25 and 50 right in one run.
 
 ### Bug Hunter
 
@@ -172,7 +176,7 @@ CI runs these on Linux, macOS and Windows with Node 22 and 24. The design docs e
 
 ## Status
 
-Version 0.3. It's young, so expect rough edges. The [changelog](CHANGELOG.md) has what changed, and if something breaks, please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
+Version 0.4. It's young, so expect rough edges. The [changelog](CHANGELOG.md) has what changed, and if something breaks, please [open an issue](https://github.com/Ninjacornix/Diffdojo/issues).
 
 ## License
 

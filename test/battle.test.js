@@ -246,6 +246,67 @@ test('Bug Hunter: FREE CHINESE LLM breaks one of Claude\'s functions; the right 
   assert.match(hit.explanation, /was changed from/);
 });
 
+test('Rush: 60 seconds from the first question, +2s right, -5s wrong, late answers don\'t count', async () => {
+  battle.start('rush');
+  let v = battle.view();
+  assert.strictEqual(v.enemy.name, 'THE CLOCK');
+  assert.strictEqual(v.rush.endsAt, null, 'the clock waits for the first question');
+  const q1 = battle.nextQuestion(db, { repoId: null, rnd: () => 0.4 });
+  assert.ok(q1.question, JSON.stringify(q1));
+  const started = battle.load().rush.endsAt;
+  assert.ok(Math.abs(started - (Date.now() + battle.RUSH_MS)) < 2000);
+  // Right: +2s and a point.
+  let r = await battle.answer(db, battle.load().pending.correctKey, { cfg: {}, root: null });
+  assert.strictEqual(r.rush, true);
+  assert.strictEqual(r.correct, true);
+  assert.strictEqual(r.score, 1);
+  assert.strictEqual(battle.load().rush.endsAt, started + battle.RUSH_BONUS_MS);
+  // Wrong: -5s, no point.
+  battle.nextQuestion(db, { repoId: null, rnd: () => 0.6 });
+  const p = battle.load().pending;
+  const wrong = ['a', 'b', 'c', 'd'].find((k) => k !== p.correctKey);
+  r = await battle.answer(db, wrong, { cfg: {}, root: null });
+  assert.strictEqual(r.correct, false);
+  assert.strictEqual(r.score, 1);
+  assert.strictEqual(battle.load().rush.endsAt, started + battle.RUSH_BONUS_MS - battle.RUSH_PENALTY_MS);
+  // An answer after the clock ran out doesn't count and ends the run.
+  battle.nextQuestion(db, { repoId: null, rnd: () => 0.2 });
+  const st = battle.load();
+  st.rush.endsAt = Date.now() - 1;
+  battle.save(st);
+  r = await battle.answer(db, st.pending.correctKey, { cfg: {}, root: null });
+  assert.strictEqual(r.late, true);
+  assert.strictEqual(r.rushOver, true);
+  assert.strictEqual(r.score, 1, 'the late right answer is not counted');
+  assert.strictEqual(battle.load().phase, 'gameover');
+  assert.strictEqual(battle.load().best.rush, 1);
+  assert.ok(r.trophies.some((t) => t.id === 'rush-first'), 'first Rush trophy');
+  // Rush again; a run that times out with nobody answering ends via rushCheck.
+  battle.resume();
+  battle.nextQuestion(db, { repoId: null });
+  const s2 = battle.load();
+  s2.rush.endsAt = Date.now() - 1;
+  battle.save(s2);
+  const c = battle.rushCheck(db);
+  assert.strictEqual(c.over, true);
+  assert.strictEqual(battle.load().best.rush, 1, 'best kept');
+});
+
+test('Rush trophies: 10, 25 and 50 right in one run', () => {
+  const rewards = require('../src/rewards');
+  battle.start('rush');
+  battle.nextQuestion(db, { repoId: null });
+  const s = battle.load();
+  s.rush.score = 26;
+  s.rush.endsAt = Date.now() - 1;
+  battle.save(s);
+  const c = battle.rushCheck(db);
+  const ids = c.trophies.map((t) => t.id);
+  assert.ok(ids.includes('rush-10') && ids.includes('rush-25') && !ids.includes('rush-50'), JSON.stringify(ids));
+  assert.ok(rewards.hasTrophy(db, 'rush-25'));
+  assert.strictEqual(battle.load().best.rush, 26);
+});
+
 test('the terminal game: RUN ends the battle and goes back to the menu', async () => {
   const term = require('../src/battle-term');
   const scene = await term.loadScene();
